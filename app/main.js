@@ -318,6 +318,35 @@ ipcMain.handle('delete-meeting', async (_evt, dir) => {
   return true;
 });
 
+/**
+ * Open an assistant's web chat in the user's normal browser.
+ *
+ * This is the honest version of "log in to your AI account". Consumer
+ * subscriptions expose no OAuth and no API to third-party apps, so the app never
+ * touches credentials at all — it hands the browser a URL, where the user is
+ * already signed in, and the prompt is already on their clipboard. Nothing to
+ * configure, nothing to revoke, and it works with every provider equally.
+ */
+const PROVIDER_URLS = {
+  claude: 'https://claude.ai/new',
+  chatgpt: 'https://chatgpt.com/',
+  gemini: 'https://gemini.google.com/app',
+  copilot: 'https://copilot.microsoft.com/',
+  perplexity: 'https://www.perplexity.ai/',
+  mistral: 'https://chat.mistral.ai/chat',
+  grok: 'https://grok.com/',
+  deepseek: 'https://chat.deepseek.com/',
+};
+
+ipcMain.handle('open-provider', async (_evt, id) => {
+  const url = PROVIDER_URLS[id];
+  // Only ever open a URL from this fixed table — never one built from user or
+  // file content.
+  if (!url) throw new Error(`Unknown provider: ${id}`);
+  await shell.openExternal(url);
+  return url;
+});
+
 ipcMain.handle('open-folder', async (_evt, dir) => {
   await shell.openPath(dir ?? MEETINGS_DIR);
 });

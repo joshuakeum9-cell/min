@@ -19,10 +19,15 @@
     "transcribe": "node app/transcribe.js",
     "prompt": "node app/prompt.js",
     "dist": "electron-builder --win --publish never",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "mcpb": "node mcp/build-bundle.js",
+    "mcp": "node mcp/server.js",
+    "mcp:test": "node mcp/smoke-test.js"
   },
   "dependencies": {
-    "sherpa-onnx-node": "1.13.7"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "sherpa-onnx-node": "1.13.7",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "electron": "44.1.1",

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   search: (q) => ipcRenderer.invoke('search', q),
   saveNote: (dir, text) => ipcRenderer.invoke('save-note', dir, text),
   deleteMeeting: (dir) => ipcRenderer.invoke('delete-meeting', dir),
+  openProvider: (id) => ipcRenderer.invoke('open-provider', id),
   openFolder: (dir) => ipcRenderer.invoke('open-folder', dir),
   modelsReady: () => ipcRenderer.invoke('models-ready'),
   meetingsDir: () => ipcRenderer.invoke('meetings-dir'),

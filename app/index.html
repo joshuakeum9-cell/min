@@ -80,8 +80,13 @@
     border-top:1px solid var(--rule); padding:14px; font:14px/1.62 inherit;
   }
   textarea::placeholder { color:var(--faint); }
-  .after { display:flex; gap:8px; padding:10px 14px 0; flex:none; }
-  .after button { flex:1; }
+  .after { display:flex; gap:8px; padding:10px 14px 0; flex:none; align-items:center; }
+  .after #write { flex:1; }
+  select.prov {
+    background:var(--panel); color:var(--ink); border:1px solid var(--rule);
+    border-radius:3px; padding:9px 8px; font:12.5px inherit; outline:none; cursor:pointer;
+  }
+  select.prov:focus { border-color:var(--mic); }
 
   /* ---- meetings view ---- */
   .searchbar { padding:10px 14px; flex:none; display:flex; gap:8px; }
@@ -179,8 +184,9 @@
     placeholder="Type as the meeting goes. Fragments are fine — half sentences, a heading, a name with a question mark.&#10;&#10;Use # headings: they become the sections of your write-up.&#10;&#10;These notes are the skeleton. They are never rewritten or overwritten."></textarea>
 
   <div class="after hide" id="after">
-    <button id="write" class="act ghost">Transcribe &amp; copy prompt</button>
-    <button id="openRec" class="act ghost">Open folder</button>
+    <button id="write" class="act">Write up with…</button>
+    <select id="provider" class="prov" title="Which assistant to open"></select>
+    <button id="openRec" class="act ghost tiny">Folder</button>
   </div>
 </section>
 
@@ -456,6 +462,41 @@ async function stopRec() {
   }
 }
 
+/**
+ * The assistants a user might already pay for.
+ *
+ * The app never sees a login. It puts the prompt on the clipboard and opens the
+ * provider's site in the normal browser, where the user is already signed in.
+ * That is the whole integration — no keys, no OAuth, nothing to revoke, and it
+ * works identically for every provider.
+ */
+const PROVIDERS = [
+  { id: 'claude',     name: 'Claude' },
+  { id: 'chatgpt',    name: 'ChatGPT' },
+  { id: 'gemini',     name: 'Gemini' },
+  { id: 'copilot',    name: 'Copilot' },
+  { id: 'perplexity', name: 'Perplexity' },
+  { id: 'grok',       name: 'Grok' },
+  { id: 'mistral',    name: 'Le Chat' },
+  { id: 'deepseek',   name: 'DeepSeek' },
+  { id: '',           name: 'Clipboard only' },
+];
+
+function initProviders() {
+  const sel = $('provider');
+  sel.innerHTML = PROVIDERS.map(
+    (p) => `<option value="${p.id}">${p.name}</option>`
+  ).join('');
+  let saved = null;
+  try { saved = localStorage.getItem('provider'); } catch {}
+  sel.value = saved ?? 'claude';
+  if (!PROVIDERS.some((p) => p.id === sel.value)) sel.value = 'claude';
+  sel.addEventListener('change', () => {
+    try { localStorage.setItem('provider', sel.value); } catch {}
+  });
+}
+initProviders();
+
 /** Transcribe then put the write-up prompt on the clipboard. */
 async function writeUp(dir, btn) {
   btn.disabled = true;
@@ -475,7 +516,19 @@ async function writeUp(dir, btn) {
       setStatus(`Transcribed ${t.count} utterances${echo}. Copying…`);
     }
     const p = await window.api.copyPrompt(dir);
-    setStatus(`✓ Copied ~${p.words.toLocaleString()} words. Paste into Claude or ChatGPT.`, 'good');
+    const providerId = $('provider')?.value ?? '';
+    const providerName = PROVIDERS.find((x) => x.id === providerId)?.name ?? '';
+
+    if (providerId) {
+      await window.api.openProvider(providerId);
+      setStatus(
+        `✓ ~${p.words.toLocaleString()} words copied · ${providerName} opening — press Ctrl+V, ` +
+          `then paste the answer back under Write-up.`,
+        'good'
+      );
+    } else {
+      setStatus(`✓ Copied ~${p.words.toLocaleString()} words to the clipboard.`, 'good');
+    }
     if (!$('viewLib').classList.contains('hide')) await openMeeting(dir);
   } catch (e) {
     setStatus('Failed: ' + e.message, 'warn');
@@ -583,7 +636,7 @@ function drawDetail(m) {
         ${m.transcribed ? 'transcribed' : 'not transcribed'}${m.hasAudio ? ' · audio kept' : ''}</div>
     </div>
     <div class="dacts">
-      <button id="dWrite" class="act tiny">${m.transcribed ? 'Copy prompt' : 'Transcribe &amp; copy prompt'}</button>
+      <button id="dWrite" class="act tiny">${m.transcribed ? 'Write up with…' : 'Transcribe, then write up'}</button>
       <button id="dOpen" class="act ghost tiny">Open folder</button>
       <button id="dDel" class="act ghost tiny">Delete</button>
     </div>

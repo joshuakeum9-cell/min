@@ -138,6 +138,38 @@ npm install
 npm start
 ```
 
+## Letting your AI read the meetings directly
+
+Two ways, neither of which needs an API key.
+
+**Pick a provider (works with everything).** After a recording, choose Claude, ChatGPT,
+Gemini, Copilot, Perplexity, Grok, Le Chat or DeepSeek from the dropdown. The app copies
+a ready-made prompt and opens that site in your browser, where you are already signed in.
+Paste, then paste the answer back under Write-up.
+
+The app never sees a login. It has no password, no token, nothing to revoke, and nothing
+to leak. Your browser already holds the session; the app just points at it.
+
+**Or install the Claude Desktop extension (no pasting at all).** Download
+`granola-local.mcpb` from Releases and double-click it, or drag it onto the Claude Desktop
+window. Then just ask:
+
+> "Write up my 3pm call with the vendor."
+
+Claude reads the meeting off your disk and saves the write-up straight back into its
+folder. Nothing is uploaded, and it runs on the Claude subscription you already have.
+Claude Desktop ships its own Node runtime, so the extension needs nothing installed.
+
+Build it yourself with `npm run mcpb`.
+
+### Why there is no "log in with ChatGPT" button
+
+Because no such thing exists. ChatGPT Plus, Claude Pro and Gemini Advanced are
+subscriptions to a website: they include no API access and expose no OAuth for third-party
+apps. The only way to fake it is to lift your browser session cookie, which all three
+providers prohibit and which gets accounts flagged. A local MCP server is the sanctioned
+route, which is why it is the one this project takes.
+
 ## Cleaning up
 
 Nothing here is precious except the source and `results/`. When you want the disk back:
