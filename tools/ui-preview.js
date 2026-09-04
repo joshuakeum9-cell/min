@@ -74,6 +74,15 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
       return res.end(js);
     }
+    // The landing page, served raw (no window.api stub needed).
+    if (req.url.startsWith('/site')) {
+      const rel = req.url === '/site' || req.url === '/site/' ? 'site/index.html' : req.url.slice(1);
+      const file = path.join(ROOT, rel);
+      const html = await fs.readFile(file);
+      const type = file.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
+      res.writeHead(200, { 'content-type': type });
+      return res.end(html);
+    }
     res.writeHead(404).end('not found');
   } catch (err) {
     res.writeHead(500).end(String(err.message));

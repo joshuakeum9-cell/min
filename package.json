@@ -22,7 +22,8 @@
     "pack": "electron-builder --dir",
     "mcpb": "node mcp/build-bundle.js",
     "mcp": "node mcp/server.js",
-    "mcp:test": "node mcp/smoke-test.js"
+    "mcp:test": "node mcp/smoke-test.js",
+    "icon": "python tools/make-icon.py"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -50,7 +51,8 @@
       "m0/lib/**/*",
       "package.json",
       "!**/*.map",
-      "!tools/**"
+      "!tools/**",
+      "!build/**"
     ],
     "asarUnpack": [
       "app/asr-worker.js",
@@ -65,25 +67,35 @@
           ]
         }
       ],
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico",
+      "signExecutable": false
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Taonim",
+      "runAfterFinish": true
     },
     "mac": {
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
-      "category": "Office"
+      "category": "Office",
+      "icon": "build/icon.png"
     }
   }
 }
