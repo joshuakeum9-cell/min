@@ -1,5 +1,5 @@
 /**
- * Taonim · M2, transcription.
+ * MIN · M2, transcription.
  *
  * Takes a meeting folder produced by the recorder and turns the two audio tracks
  * into one interleaved transcript with speaker attribution.
@@ -96,7 +96,7 @@ function runWorker({ wav, speaker, modelDir, vadModel, threads, onProgress }) {
     const bump = () => {
       clearTimeout(stall);
       stall = setTimeout(() => {
-        workerError = `no output for ${WORKER_STALL_MS / 60000} min — worker stalled`;
+        workerError = `no output for ${WORKER_STALL_MS / 60000} min, worker stalled`;
         child.kill();
         exitCode = exitCode ?? -1;
         finish();
@@ -402,9 +402,9 @@ export async function transcribeMeeting(dir, opts = {}) {
     log(`   audio deleted (${present.length} files)`);
   } else {
     meta.audioDisposition = keepAudio
-      ? 'kept — --keep-audio'
-      : 'kept — a worker failed, so the transcript may be incomplete';
-    log(`   audio KEPT — ${allOk ? '--keep-audio' : 'a worker failed'}`);
+      ? 'kept, --keep-audio'
+      : 'kept, a worker failed, so the transcript may be incomplete';
+    log(`   audio KEPT, ${allOk ? '--keep-audio' : 'a worker failed'}`);
   }
 
   await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
@@ -434,7 +434,7 @@ if (isMain(import.meta.url)) {
 
   console.log(
     `Transcribing ${dirs.length} meeting(s) with ${threads} threads, CPU only.` +
-      `\nSpeaker labels come from which track the audio was on — no diarization needed.`
+      `\nSpeaker labels come from which track the audio was on, no diarization needed.`
   );
 
   let failures = 0;

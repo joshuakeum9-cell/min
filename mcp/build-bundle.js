@@ -1,5 +1,5 @@
 /**
- * Builds taonim.mcpb, a one-click Claude Desktop extension.
+ * Builds min.mcpb, a one-click Claude Desktop extension.
  *
  * An .mcpb is a zip holding an MCP server plus a manifest, installed by
  * double-clicking it or dragging it onto Claude Desktop. That matters here
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const STAGE = path.join(ROOT, 'dist', 'mcpb-stage');
-const OUT = path.join(ROOT, 'dist', 'taonim.mcpb');
+const OUT = path.join(ROOT, 'dist', 'min.mcpb');
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
@@ -30,8 +30,8 @@ const RUNTIME_DEPS = ['@modelcontextprotocol/sdk', 'zod'];
 
 const manifest = {
   manifest_version: '0.3',
-  name: 'Taonim',
-  display_name: 'Taonim meetings',
+  name: 'MIN',
+  display_name: 'MIN meetings',
   version: pkg.version,
   // This is what Claude Desktop shows in the install dialog, and for most people
   // it is the only thing they read before granting filesystem access. It has to
@@ -39,9 +39,9 @@ const manifest = {
   // plaintext copy of their meetings living outside the Meetings folder.
   description:
     'Reads the meetings in your Meetings folder and saves write-ups back into it. ' +
-    "Search builds an index of your meeting text in Taonim's own app data folder.",
+    "Search builds an index of your meeting text in MIN's own app data folder.",
   long_description:
-    'Gives Claude direct access to the meetings recorded by Taonim: the notes you ' +
+    'Gives Claude direct access to the meetings recorded by MIN: the notes you ' +
     'typed during each call, the transcript with speakers separated into you and them, and ' +
     'the finished write-up.\n\n' +
     'Ask for "a write-up of my 3pm call" and Claude reads the meeting off your disk and ' +
@@ -50,9 +50,9 @@ const manifest = {
     'transcript.md and note.md, and writes note.md plus a timestamp in meeting.json. Your ' +
     'recordings are never read. To make search fast ' +
     'it also builds a full-text index holding the plaintext of every note, transcript and ' +
-    "write-up, and writes that index into Taonim's own application data folder: " +
-    '%APPDATA%\\Taonim\\mcp-index.db on Windows, ' +
-    '~/Library/Application Support/Taonim/mcp-index.db on macOS. The index is a cache, so you ' +
+    "write-up, and writes that index into MIN's own application data folder: " +
+    '%APPDATA%\\MIN\\mcp-index.db on Windows, ' +
+    '~/Library/Application Support/MIN/mcp-index.db on macOS. The index is a cache, so you ' +
     'can delete it at any time and the next search rebuilds it. Nothing outside those two ' +
     'places is read or written, with one exception: on startup it deletes the index an ' +
     'earlier build of this extension left in your temp folder.\n\n' +
@@ -116,7 +116,7 @@ async function main() {
   await fsp.writeFile(
     path.join(serverDir, 'package.json'),
     JSON.stringify(
-      { name: 'taonim-mcp', version: pkg.version, type: 'module', private: true, dependencies: versions },
+      { name: 'min-mcp', version: pkg.version, type: 'module', private: true, dependencies: versions },
       null,
       2
     ) + '\n'

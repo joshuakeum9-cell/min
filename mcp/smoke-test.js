@@ -1,5 +1,5 @@
 /**
- * MCP smoke test — drives the real server over a real stdio transport.
+ * MCP smoke test, drives the real server over a real stdio transport.
  *
  * Deliberately uses the SDK client rather than hand-rolled JSON-RPC, so this
  * exercises the same handshake an actual assistant performs. A server that
@@ -17,7 +17,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(HERE, 'server.js');
 
 const ok = (label, cond, extra = '') =>
-  console.log(`${cond ? '  ok  ' : '  FAIL'} ${label}${extra ? '  — ' + extra : ''}`);
+  console.log(`${cond ? '  ok  ' : '  FAIL'} ${label}${extra ? ' , ' + extra : ''}`);
 
 const transport = new StdioClientTransport({
   command: process.execPath,
@@ -50,7 +50,7 @@ console.log('\n' + list.split('\n').slice(0, 4).join('\n') + '\n');
 // Pull a real folder name out of the listing to drive the rest.
 const id = list.match(/^- (\S+)$/m)?.[1];
 if (!id) {
-  console.log('\nNo meetings on disk — record one to exercise the remaining tools.');
+  console.log('\nNo meetings on disk, record one to exercise the remaining tools.');
   await client.close();
   process.exit(0);
 }

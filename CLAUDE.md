@@ -1,4 +1,4 @@
-# Taonim: context for Claude Code
+# MIN: context for Claude Code
 
 A local-first meeting notes app. Captures both sides of a call with no bot joining,
 transcribes on the user's own machine, saves plain markdown to a folder the user owns.
@@ -127,7 +127,7 @@ The first two look fine under `npm start` and fail once installed.
   ~530 MB and the shipped app never loads a local LLM: the write-up step hands a prompt
   to the clipboard. It belongs in devDependencies, which is where it now sits, and the
   M0 benchmarks still use it from there. The historical pre-CUDA-removal build that
-  carried it was 378 MB. The current installer, `dist/Taonim-Setup.exe`, is about
+  carried it was 378 MB. The current installer, `dist/MIN-Setup.exe`, is about
   118 MB.
 
 ## Bleed suppression is load-bearing and deletes user data

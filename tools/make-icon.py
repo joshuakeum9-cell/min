@@ -1,5 +1,5 @@
 """
-Generates the Taonim app icon.
+Generates the MIN app icon.
 
 The mark is the product's own idea: two audio tracks captured separately and
 never mixed. A white bar for you, a coral bar for them, on the system's

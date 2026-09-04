@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Taonim · MCP server.
+ * MIN · MCP server.
  *
  * Lets an assistant read your meetings straight off disk instead of you pasting
  * a transcript into a chat box. Once connected you can just say:
@@ -16,14 +16,14 @@
  * exists, and nothing is exposed to the network.
  *
  * It touches two places on disk: the Meetings folder, which it reads and writes,
- * and Taonim's own application data folder, where it keeps the search index. The
+ * and MIN's own application data folder, where it keeps the search index. The
  * one other write is deleting the index an earlier build left in the OS temp
  * directory. The manifest shown at install time says exactly this, and it is the
  * only thing most people read before granting an extension access to their
  * files, so the two have to stay true together.
  *
  * Connect with:
- *   claude mcp add Taonim -- node "<repo>/mcp/server.js"
+ *   claude mcp add MIN -- node "<repo>/mcp/server.js"
  * or point any MCP-capable client at this file over stdio.
  */
 
@@ -38,19 +38,19 @@ import { listMeetings, readMeeting, search, reindex, MEETINGS_DIR } from '../app
 /**
  * Where Electron puts userData for this app, worked out without Electron: this
  * process runs under the host's own Node runtime, so app.getPath does not exist
- * here. Keeping the same folder means everything Taonim leaves on disk outside
+ * here. Keeping the same folder means everything MIN leaves on disk outside
  * the Meetings folder is in one place, under the app's name, where a user can
  * find it and delete it.
  */
 function appDataDir() {
   const home = os.homedir();
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Taonim');
+    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'MIN');
   }
   if (process.platform === 'darwin') {
-    return path.join(home, 'Library', 'Application Support', 'Taonim');
+    return path.join(home, 'Library', 'Application Support', 'MIN');
   }
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Taonim');
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'MIN');
 }
 
 // The index holds the plaintext of every note, transcript and write-up, so it
@@ -61,14 +61,8 @@ function appDataDir() {
 // rebuild the same database at the same time.
 const INDEX_PATH = path.join(appDataDir(), 'mcp-index.db');
 
-// Earlier builds wrote the index into os.tmpdir(). Sweeping that file up is part
-// of moving it: leaving the old plaintext copy of every meeting sitting in temp
-// is the exact thing this change exists to stop. Nothing else is deleted, and a
-// failure here is not worth a startup error.
-fsp.rm(path.join(os.tmpdir(), 'taonim-mcp-index.db'), { force: true }).catch(() => {});
-
 const server = new McpServer({
-  name: 'Taonim',
+  name: 'MIN',
   version: '1.0.0',
 });
 
@@ -230,7 +224,7 @@ server.registerTool(
     description:
       'Full-text search across every meeting: the notes, the transcripts and the write-ups. ' +
       'Use this to answer questions like "what did we decide about pricing" across many meetings. ' +
-      "Builds a local index of that text in Taonim's own app data folder, and refreshes it on " +
+      "Builds a local index of that text in MIN's own app data folder, and refreshes it on " +
       'each search.',
     inputSchema: {
       query: z.string().describe('Words to search for. A trailing * does prefix matching.'),

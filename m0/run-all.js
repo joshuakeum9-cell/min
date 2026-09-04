@@ -75,7 +75,7 @@ if (isMain(import.meta.url)) {
 
   if (L) {
     const ceiling = Math.min(...L.findings.map((f) => f.maxSeconds));
-    line(`ASR chunk ceiling      ${ceiling}s (${(ceiling / 60).toFixed(1)} min) — a native abort, not catchable`);
+    line(`ASR chunk ceiling      ${ceiling}s (${(ceiling / 60).toFixed(1)} min), a native abort, not catchable`);
     for (const f of L.findings) {
       if (f.bestChunk) {
         line(
@@ -98,7 +98,7 @@ if (isMain(import.meta.url)) {
   }
 
   line();
-  line('Still outstanding — these are the two that actually decide the project:');
+  line('Still outstanding, these are the two that actually decide the project:');
   line();
   line('  □  Capture integrity        npm run m0:capture');
   line('     Needs you to pause the audio mid-recording. Answers whether loopback');

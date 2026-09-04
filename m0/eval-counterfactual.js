@@ -124,7 +124,7 @@ async function generate(modelName) {
     process.exit(1);
   }
   if (meetings.length < 10) {
-    console.log(`⚠  Only ${meetings.length} meetings. The 7-of-10 gate assumes 10 — treat this as a smoke test.\n`);
+    console.log(`⚠  Only ${meetings.length} meetings. The 7-of-10 gate assumes 10, treat this as a smoke test.\n`);
   }
 
   const { getLlama, LlamaChatSession, QwenChatWrapper } = await import('node-llama-cpp');
@@ -204,7 +204,7 @@ async function generate(modelName) {
   console.log(`  separation                     ${(meanReal - meanDecoy).toFixed(3)}`);
   console.log(
     meanReal - meanDecoy < 0.15
-      ? `  ⚠  Weak separation. The model may be ignoring the notes — read the pairs closely.`
+      ? `  ⚠  Weak separation. The model may be ignoring the notes, read the pairs closely.`
       : `  ✓  The real notes leave a measurably stronger trace.`
   );
   console.log(
@@ -249,7 +249,7 @@ async function score() {
   console.log(`\n${'─'.repeat(58)}`);
   console.log(`  ${correct} of ${answers.length} identified correctly  (${(ratio * 100).toFixed(0)}%)`);
   console.log(`  gate: ${(PASS_RATIO * 100).toFixed(0)}%`);
-  console.log(`\n  ${passed ? '✓  PASS — the model is genuinely using the notes.' : '✗  FAIL — the enhancement is a summariser wearing a costume.'}`);
+  console.log(`\n  ${passed ? '✓  PASS, the model is genuinely using the notes.' : '✗  FAIL, the enhancement is a summariser wearing a costume.'}`);
   if (!passed) {
     console.log(
       `\n  This is the decision the whole spike exists to force. The architecture is\n` +
@@ -349,7 +349,7 @@ async function makeFixtures() {
   console.log(`Wrote ${EXAMPLES.length} example meetings → ${path.relative(process.cwd(), FIXTURES)}\n`);
   console.log(
     `These exist so the harness runs today. They are short and clean, and real\n` +
-      `meetings are neither — so a pass on these is NOT a pass on the gate.\n` +
+      `meetings are neither, so a pass on these is NOT a pass on the gate.\n` +
       `Replace them with 10 real meetings: for each, a folder with transcript.md\n` +
       `and my-notes.md holding the notes you actually typed at the time.\n`
   );
@@ -366,7 +366,7 @@ if (isMain(import.meta.url)) {
   else if (argv[0] === 'generate') await generate(modelArg);
   else {
     console.log(
-      'The counterfactual-notes test — the M0 gate.\n\n' +
+      'The counterfactual-notes test, the M0 gate.\n\n' +
         '  node m0/eval-counterfactual.js --make-fixtures   write example meetings\n' +
         '  node m0/eval-counterfactual.js generate          build blind A/B pairs\n' +
         '  node m0/eval-counterfactual.js score             record your judgements\n\n' +

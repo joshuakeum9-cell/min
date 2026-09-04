@@ -161,7 +161,7 @@ async function probeModel(model, threads) {
 
   console.log(
     firstFail === null
-      ? `   → no ceiling up to ${lastOk}s — extend the ladder\n`
+      ? `   → no ceiling up to ${lastOk}s, extend the ladder\n`
       : `   → ceiling ≈ ${ceiling}s (${(ceiling / 60).toFixed(1)} min), crashes by ${firstFail}s\n` +
           `   → fastest chunk ${best?.seconds}s at ${best?.rtf}x  (a 60-min meeting ≈ ${(3600 / (best?.rtf ?? 1) / 60).toFixed(1)} min)\n`
   );
@@ -184,7 +184,7 @@ if (isMain(import.meta.url)) {
 
   console.log(describe(hw));
   const warnings = validateTestBed(hw);
-  if (warnings.length) console.log(`\n⚠  Upper-bound numbers — ${warnings.length} test-bed warning(s).`);
+  if (warnings.length) console.log(`\n⚠  Upper-bound numbers, ${warnings.length} test-bed warning(s).`);
   console.log(`\nEach duration runs in its own process, because the failure mode is a native abort.\n`);
 
   const findings = [];
@@ -197,7 +197,7 @@ if (isMain(import.meta.url)) {
 
   console.log(`saved → ${path.relative(process.cwd(), file)}\n`);
   console.log('Implications for M2:');
-  console.log(`  · Never hand the recogniser more than ${smallest}s of audio — it aborts the process, uncatchably.`);
+  console.log(`  · Never hand the recogniser more than ${smallest}s of audio, it aborts the process, uncatchably.`);
   console.log(`  · Run ASR in a child process regardless, so a bad chunk cannot take the app down.`);
   console.log(`  · Chunk well below the ceiling: throughput falls as chunks grow, so short chunks win twice.`);
   console.log(`  · Split at VAD silence boundaries so no word is cut, and reassemble with offset timestamps.`);

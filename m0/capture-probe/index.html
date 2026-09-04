@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>M0 — capture integrity probe</title>
+<title>M0, capture integrity probe</title>
 <style>
   :root {
     --bg: #101312; --panel: #181C1A; --rule: #2B312E;
@@ -64,7 +64,7 @@
 <p class="sub">Measures whether the system-audio loopback track delivers continuous frames or drops out during silence. The answer decides whether the app needs timestamp gap-reconstruction, or whether frame counts can be trusted as a clock.</p>
 
 <div class="protocol">
-  <b>Protocol</b> — the point is to create a real silence gap in the system audio while the mic keeps running.
+  <b>Protocol</b>, the point is to create a real silence gap in the system audio while the mic keeps running.
   <ol>
     <li>Start something playing through your speakers or headphones (a video, music).</li>
     <li>Press <b>Start</b>. Let the audio play for the first third.</li>
@@ -84,11 +84,11 @@
 
 <div id="meters" class="hide">
   <div class="meter m-mic">
-    <div class="lbl"><span>▲ Microphone — you</span><span id="micStat">—</span></div>
+    <div class="lbl"><span>▲ Microphone, you</span><span id="micStat">,</span></div>
     <canvas id="micCv"></canvas>
   </div>
   <div class="meter m-sys">
-    <div class="lbl"><span>▼ System loopback — everyone else</span><span id="sysStat">—</span></div>
+    <div class="lbl"><span>▼ System loopback, everyone else</span><span id="sysStat">,</span></div>
     <canvas id="sysCv"></canvas>
   </div>
 </div>
@@ -197,7 +197,7 @@ async function start() {
 
   // A tiny video request is required to obtain the audio track; the frames are
   // discarded immediately. restrictOwnAudio keeps our own output out of the
-  // loopback channel (landed in Electron 44.0.0) — but if this build does not
+  // loopback channel (landed in Electron 44.0.0), but if this build does not
   // recognise it, an unsupported constraint is fatal, so fall back rather than
   // fail the whole run.
   let constraintUsed = 'restrictOwnAudio';
@@ -205,7 +205,7 @@ async function start() {
     ? [{ audio: true, label: 'plain (loopbackWithMute)' }]
     : [
         { audio: { restrictOwnAudio: true }, label: 'restrictOwnAudio' },
-        { audio: true, label: 'plain — restrictOwnAudio unsupported, our own output may bleed in' },
+        { audio: true, label: 'plain, restrictOwnAudio unsupported, our own output may bleed in' },
       ];
 
   let lastErr = null;
@@ -231,7 +231,7 @@ async function start() {
 
   const sysAudio = tracks.sys.stream.getAudioTracks();
   if (sysAudio.length === 0) {
-    status.textContent = 'No system audio track was returned — loopback is unsupported on this platform/build.';
+    status.textContent = 'No system audio track was returned, loopback is unsupported on this platform/build.';
     return;
   }
 
@@ -267,7 +267,7 @@ async function start() {
   const tick = () => {
     if (!running) return;
     const el = (performance.now() - t0) / 1000;
-    const phase = el < secs / 3 ? 'PLAY AUDIO' : el < (2 * secs) / 3 ? 'SILENCE — pause the audio' : 'PLAY AUDIO';
+    const phase = el < secs / 3 ? 'PLAY AUDIO' : el < (2 * secs) / 3 ? 'SILENCE, pause the audio' : 'PLAY AUDIO';
     status.textContent = `● recording  ${el.toFixed(1)}s / ${secs}s   →   ${phase}`;
     requestAnimationFrame(tick);
   };
@@ -333,12 +333,12 @@ async function stop() {
       text:
         `Loopback delivered ${sys.capturedSeconds}s of audio across ${wallSeconds.toFixed(2)}s of wall clock ` +
         `(${sys.deficitPct}% deficit). Chromium zero-fills through silence, so frame counts ARE a reliable clock. ` +
-        `The app does not need gap-reconstruction logic — but keep per-frame timestamps anyway for device changes.`,
+        `The app does not need gap-reconstruction logic, but keep per-frame timestamps anyway for device changes.`,
     },
     GAPPED: {
       cls: 'v-bad',
       text:
-        `Loopback delivered only ${sys.capturedSeconds}s across ${wallSeconds.toFixed(2)}s of wall clock — ` +
+        `Loopback delivered only ${sys.capturedSeconds}s across ${wallSeconds.toFixed(2)}s of wall clock, ` +
         `a ${sys.deficitSeconds}s deficit (${sys.deficitPct}%). The raw WASAPI silence gap reaches the renderer. ` +
         `Concatenating buffers WILL desynchronise the two tracks. Timestamp-based gap reconstruction is mandatory.`,
     },
@@ -347,11 +347,11 @@ async function stop() {
       text:
         `The loopback track was silent for the whole run, so nothing was measured. ` +
         `Play audio through your speakers or headphones and run it again. If it stays silent with audio playing, ` +
-        `loopback capture is silently broken on this machine — which is exactly the failure this probe exists to catch.`,
+        `loopback capture is silently broken on this machine, which is exactly the failure this probe exists to catch.`,
     },
   };
 
-  $('verdict').innerHTML = `<div class="verdict ${verdicts[finding].cls}"><b>${finding}</b> — ${verdicts[finding].text}</div>`;
+  $('verdict').innerHTML = `<div class="verdict ${verdicts[finding].cls}"><b>${finding}</b>, ${verdicts[finding].text}</div>`;
 
   const payload = {
     probe: 'capture-integrity',

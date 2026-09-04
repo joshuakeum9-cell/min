@@ -173,7 +173,7 @@ if (isMain(import.meta.url)) {
   console.log(describe(hw));
   const warnings = validateTestBed(hw);
   if (warnings.length) {
-    console.log('\n⚠  Not a valid M0 test bed — these numbers are an UPPER BOUND:');
+    console.log('\n⚠  Not a valid M0 test bed, these numbers are an UPPER BOUND:');
     for (const w of warnings) console.log(`   · ${w}`);
   }
   console.log(
@@ -200,7 +200,7 @@ if (isMain(import.meta.url)) {
       await synthesizeLongWav(sherpa, wav, args.synth, outPath);
     }
     wav = outPath;
-    console.log(`Throughput/memory probe on ${path.basename(wav)} — repeated speech, so ignore the transcript.\n`);
+    console.log(`Throughput/memory probe on ${path.basename(wav)}, repeated speech, so ignore the transcript.\n`);
   }
 
   const results = [];

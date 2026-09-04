@@ -1,5 +1,5 @@
 /**
- * Taonim · the library, listing and full-text search across meetings.
+ * MIN · the library, listing and full-text search across meetings.
  *
  * The markdown files on disk are the only source of truth. This index is a cache
  * and nothing else: it lives outside the meetings folder, it is rebuilt from the
@@ -82,7 +82,7 @@ export async function listMeetings() {
     .filter((e) => e.isDirectory())
     .map((e) => path.join(MEETINGS_DIR, e.name))
     .sort()
-    .reverse(); // newest first — the one you want is almost always the last one
+    .reverse(); // newest first, the one you want is almost always the last one
 
   const out = [];
   for (const d of dirs) {

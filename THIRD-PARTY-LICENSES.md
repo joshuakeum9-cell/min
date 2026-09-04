@@ -70,7 +70,7 @@ Electron bundles Chromium and Node.js, which carry their own licences. The
 Chromium-derived libraries in the install directory are `d3dcompiler_47.dll`,
 `dxcompiler.dll`, `dxil.dll`, `ffmpeg.dll`, `vk_swiftshader.dll` and `vulkan-1.dll`.
 Their licences are enumerated in `LICENSES.chromium.html`, which electron-builder
-already places next to `Taonim.exe`, alongside `LICENSE.electron.txt`. Those two
+already places next to `MIN.exe`, alongside `LICENSE.electron.txt`. Those two
 files are the authoritative notice for the Electron and Chromium layer.
 
 The note library uses SQLite through Node's built-in `node:sqlite` module, so no
@@ -231,5 +231,5 @@ question this file fails to answer.
 ## Reporting an error here
 
 If a licence, copyright holder or URL on this page is wrong, that is a defect worth
-an issue on https://github.com/joshuakeum9-cell/taonim. Getting attribution right
+an issue on https://github.com/joshuakeum9-cell/min. Getting attribution right
 matters more than getting it quickly.

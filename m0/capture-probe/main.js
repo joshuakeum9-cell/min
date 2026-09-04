@@ -24,7 +24,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 880,
     height: 760,
-    title: 'M0 — capture integrity probe',
+    title: 'M0, capture integrity probe',
     backgroundColor: '#101312',
     webPreferences: {
       nodeIntegration: true,

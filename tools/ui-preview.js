@@ -1,6 +1,6 @@
 /**
  * Serves app/index.html so the interface can be inspected in a browser during
- * design work. Development only — the real app loads the same file through
+ * design work. Development only, the real app loads the same file through
  * Electron, where window.api exists.
  *
  * The renderer expects window.api (an Electron preload bridge). Here that is
@@ -75,7 +75,7 @@ const STUB_JS = `
     '/m/1': {
       notes: '# Timeline\\n- pilot slipping?\\n- schema freeze friday\\n\\n# Risks\\n- vendor again\\n- legal DPA lead time\\n\\n# Mine\\n- open the ticket',
       transcript: '[00:00:00] Them: We should push the pilot to the second week of October.\\n[00:00:17] You: That works, but it compresses the review window to four days.\\n[00:00:34] Them: Four days is enough if we get the schema frozen by Friday.',
-      note: '# Timeline\\n\\nThe pilot is moving to the second week of October — the data team is not ready. That compresses the review window to four days, which works only if the schema is frozen by Friday.\\n\\n# Risks\\n\\nThe vendor may slip again. The fallback is one more manual export cycle, which nobody wants to run in December.\\n\\n# Mine\\n\\nOpen the legal ticket this afternoon. The DPA takes ten working days.',
+      note: '# Timeline\\n\\nThe pilot is moving to the second week of October, the data team is not ready. That compresses the review window to four days, which works only if the schema is frozen by Friday.\\n\\n# Risks\\n\\nThe vendor may slip again. The fallback is one more manual export cycle, which nobody wants to run in December.\\n\\n# Mine\\n\\nOpen the legal ticket this afternoon. The DPA takes ten working days.',
     },
   };
   window.api = {

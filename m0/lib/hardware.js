@@ -104,7 +104,7 @@ export function modelTier(hw) {
   return {
     tier: 'light',
     llm: 'qwen3-1.7b',
-    reason: `${hw.ramGB} GB RAM is tight — 4B would page or force serial model loading`,
+    reason: `${hw.ramGB} GB RAM is tight, 4B would page or force serial model loading`,
   };
 }
 

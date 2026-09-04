@@ -229,7 +229,7 @@ async function benchModel({ model, lengths, noteTokens, budget, threads, gpu }) 
     steps.push(r);
 
     if (r.timedOut) {
-      say(`   ${String(r.promptTokens).padStart(7)} ${String(r.contextSize).padStart(7)}   TIMED OUT after ${budget}s — stopping sweep\n`);
+      say(`   ${String(r.promptTokens).padStart(7)} ${String(r.contextSize).padStart(7)}   TIMED OUT after ${budget}s, stopping sweep\n`);
       break;
     }
     say(
@@ -252,7 +252,7 @@ if (isMain(import.meta.url)) {
   console.log(describe(hw));
   const warnings = validateTestBed(hw);
   if (warnings.length) {
-    console.log('\n⚠  Not a valid M0 test bed — UPPER BOUND only:');
+    console.log('\n⚠  Not a valid M0 test bed, UPPER BOUND only:');
     for (const w of warnings) console.log(`   · ${w}`);
   }
   if (args.gpu) console.log('\n⚠  --gpu is for contrast only. The target user has no discrete GPU.');
@@ -277,7 +277,7 @@ if (isMain(import.meta.url)) {
   for (const r of results) {
     const full = r.steps.find((s) => !s.timedOut && s.promptTokens >= 12000);
     if (!full) {
-      console.log(`  ${r.model.padEnd(12)} no completed 13k step — 60-minute meetings are out of reach here`);
+      console.log(`  ${r.model.padEnd(12)} no completed 13k step, 60-minute meetings are out of reach here`);
       continue;
     }
     const scaled = (full.warmTotalMs / 1000) * SCALE;

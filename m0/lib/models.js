@@ -25,12 +25,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  *
  * In development that is ./models next to the source. In a packaged app the
  * source sits inside an asar archive, which is read-only, so the host sets
- * TAONIM_MODELS_DIR to a writable per-user location before importing this.
+ * MIN_MODELS_DIR to a writable per-user location before importing this.
  * Models are never bundled into the installer: they are ~4.6 GB, carry their own
  * licences, and baking them in would make every auto-update re-download the lot.
  */
 export const MODELS_DIR =
-  process.env.TAONIM_MODELS_DIR || path.resolve(HERE, '../../models');
+  process.env.MIN_MODELS_DIR || path.resolve(HERE, '../../models');
 const LOCK_FILE = path.join(MODELS_DIR, 'models.lock.json');
 
 /**
@@ -53,7 +53,7 @@ export const MANIFEST = {
     repo: 'csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8',
     rev: '1ab9323565ddb038682214b292f588070a538ce2',  // pinned 2026-09-03
     dir: 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8',
-    license: 'CC-BY-4.0 (NVIDIA) — attribution required in a NOTICES screen',
+    license: 'CC-BY-4.0 (NVIDIA), attribution required in a NOTICES screen',
     files: {
       'encoder.int8.onnx': 652184296,
       'decoder.int8.onnx': 7257753,
@@ -64,11 +64,11 @@ export const MANIFEST = {
   },
   'parakeet-v3': {
     kind: 'asr',
-    note: '25 languages. sherpa-onnx does publish this — the research concluded it did not, and that was wrong.',
+    note: '25 languages. sherpa-onnx does publish this, the research concluded it did not, and that was wrong.',
     repo: 'csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8',
     rev: '2bda32ec70b097a55adaa07d9a7173915b43cc78',  // pinned 2026-09-03
     dir: 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8',
-    license: 'CC-BY-4.0 (NVIDIA) — attribution required in a NOTICES screen',
+    license: 'CC-BY-4.0 (NVIDIA), attribution required in a NOTICES screen',
     files: {
       'encoder.int8.onnx': 652184281,
       'decoder.int8.onnx': 11845275,
@@ -226,7 +226,7 @@ async function download(url, dest, expectedBytes, label, onProgress) {
       // The default message here would be "size mismatch, upstream may have
       // changed", which is an actively wrong diagnosis of a full disk.
       throw new Error(
-        `${label}: out of disk space. Free some space and re-run — the partial ` +
+        `${label}: out of disk space. Free some space and re-run, the partial ` +
           `download resumes rather than starting over.`
       );
     }
@@ -254,12 +254,12 @@ async function verifyOrPin(key, file, lock) {
   // Hashing the 652 MB encoder before every transcription costs seconds of dead
   // time behind a "Transcribing..." message. If size and mtime are unchanged
   // since the pin, the bytes are unchanged. Existing pins self-upgrade on the
-  // first run after this, and TAONIM_VERIFY_MODELS=1 forces a full check.
+  // first run after this, and MIN_VERIFY_MODELS=1 forces a full check.
   if (
     rec?.sha256 &&
     rec.size === st.size &&
     rec.mtimeMs === st.mtimeMs &&
-    !process.env.TAONIM_VERIFY_MODELS
+    !process.env.MIN_VERIFY_MODELS
   ) {
     return false;
   }
