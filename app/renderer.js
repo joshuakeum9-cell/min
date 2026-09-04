@@ -152,12 +152,22 @@ async function start() {
   if (streams.sys.getAudioTracks().length === 0)
     return fail('No system-audio track: loopback is unsupported here.');
 
-  ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
-  const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
-  await ctx.audioWorklet.addModule(url);
-  URL.revokeObjectURL(url);
-  await attach('mic', streams.mic);
-  await attach('sys', streams.sys);
+  // Both devices are already live at this point. An exception escaping this
+  // region would leave the microphone and the loopback capturing with the UI
+  // showing idle and Record stuck disabled, so route it through fail(), which
+  // tears the capture down, clears starting and re-enables the button.
+  try {
+    ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    const url = URL.createObjectURL(new Blob([WORKLET], { type: 'text/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    await attach('mic', streams.mic);
+    await attach('sys', streams.sys);
+  } catch (e) {
+    try { await ctx?.close(); } catch { /* never opened, or already closed */ }
+    ctx = null;
+    return fail('Audio pipeline could not start: ' + e.message);
+  }
 
   navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
   for (const s of [streams.mic, streams.sys]) {
@@ -229,9 +239,13 @@ async function stopRec() {
   teardownCapture();
   try { await ctx.close(); } catch {}
 
+  // Held outside the try so a failed save can hand the PCM back. The chunk
+  // arrays are still released before the save, so the success path never holds
+  // two copies of a three-hour recording at once.
+  let mic = null, sys = null;
   try {
-    const mic = concat(T.mic.chunks);
-    const sys = concat(T.sys.chunks);
+    mic = concat(T.mic.chunks);
+    sys = concat(T.sys.chunks);
     T.mic.chunks = []; T.sys.chunks = [];
     const { dir, meta } = await window.api.saveMeeting({
       startedAt, endedAt,
@@ -258,10 +272,16 @@ async function stopRec() {
       `✓ Saved ${meta.durationSeconds.toFixed(0)}s · you ${meta.tracks.mic.voicedSeconds}s ` +
       `· them ${meta.tracks.system.voicedSeconds}s`, 'good');
   } catch (e) {
-    setStatus('Save failed: ' + e.message, 'warn');
+    // The file on disk was the only copy this path was about to make, so put
+    // the audio back rather than discarding hours of meeting on a full disk.
+    if (mic) T.mic.chunks = [mic];
+    if (sys) T.sys.chunks = [sys];
+    setStatus(
+      'Save failed: ' + e.message +
+      ' The recording is still in memory. Keep this window open: it is lost if you ' +
+      'close the app or start another recording.', 'warn');
   } finally {
     // Must run even when concat or saveMeeting throws, or Record stays dead.
-    T.mic.chunks = []; T.sys.chunks = [];
     $('rec').disabled = false;
     $('rec').classList.remove('rec-on');
     $('clock').textContent = '00:00';
@@ -320,6 +340,14 @@ async function writeUp(dir, btn) {
           : 'First run: downloading the ~640 MB speech model. This happens once.'
       );
       const t = await window.api.transcribe(dir);
+      if (t.empty) {
+        setStatus(
+          'Nothing was recognised in this recording. The audio has been kept so you can try '
+            + 'again: check the microphone and system-audio devices, then press Write up.',
+          'warn'
+        );
+        return;
+      }
       const echo = t.echoes ? ` (${t.echoes} echo line${t.echoes > 1 ? 's' : ''} removed)` : '';
       setStatus(`Transcribed ${t.count} utterances${echo}. Copying…`);
     }

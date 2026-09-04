@@ -1,4 +1,4 @@
-# Models are fetched at runtime and checksum-pinned, never vendored.
+# Models are fetched at runtime and verified against shipped checksums, never vendored.
 # 4.7 GB here is the full development manifest, not a user download: a default
 # install fetches 642 MiB (Parakeet TDT 0.6B v3 plus Silero VAD). The Qwen3
 # GGUFs are benchmark-only, since the shipped app has no local LLM.
@@ -8,8 +8,11 @@
 # negation below.
 models/*
 
-# models.lock.json IS tracked: it pins the exact bytes each release was built
-# against, so a silently-changed upstream is caught rather than trusted.
+# models.lock.json IS tracked, but it is only a record of what this checkout
+# downloaded. The checksums that are enforced ship inside the app, in
+# m0/lib/models.pins.json: every model file is checked against its pin before it
+# is used and a mismatch is refused, so a changed or substituted download is
+# caught rather than trusted.
 !models/models.lock.json
 
 node_modules/

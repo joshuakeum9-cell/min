@@ -44,6 +44,12 @@ const TRACKS = [
   { file: 'system.wav', speaker: 'Them' },
 ];
 
+// A meeting folder can be copied in or shared, so the wavs are not necessarily
+// ours, and sherpa's reader is native code handed the whole file. 16 kHz mono
+// 16-bit is 32 kB per second, so 2 GB is over 17 hours: nothing this app
+// records comes near it.
+const MAX_WAV_BYTES = 2 * 1024 * 1024 * 1024;
+
 /* ------------------------------------------------------------------- worker */
 
 const WORKER_STALL_MS = 10 * 60 * 1000;
@@ -288,7 +294,13 @@ export async function transcribeMeeting(dir, opts = {}) {
   const present = [];
   for (const t of TRACKS) {
     const p = path.join(dir, t.file);
-    if (await fsp.stat(p).then((s) => s.size > 44).catch(() => false)) present.push({ ...t, wav: p });
+    const size = await fsp.stat(p).then((s) => s.size).catch(() => null);
+    if (size == null || size <= 44) continue;
+    if (size > MAX_WAV_BYTES) {
+      log(`   ⚠ ${t.file} is ${(size / 1e9).toFixed(1)} GB, over the 2 GB limit, skipped`);
+      continue;
+    }
+    present.push({ ...t, wav: p });
   }
   if (!present.length) {
     throw new Error(`No audio in ${dir}. Already transcribed, or the recording failed.`);
@@ -352,8 +364,15 @@ export async function transcribeMeeting(dir, opts = {}) {
   if (suppressed.length) {
     log(`   ${suppressed.length} echo line(s) suppressed - you were on speakers, not headphones`);
   }
+  // A worker can exit cleanly having recognised nothing: silence, the wrong
+  // input device, a model that loaded but matched no speech. An empty
+  // transcript.md would mark the meeting done forever while library.js, which
+  // reads transcribed as Boolean(transcript), still calls it untranscribed, and
+  // the audio it would take to retry is deleted below. So write no transcript
+  // at all for an empty result.
+  const empty = count === 0;
   const transcriptName = allOk ? 'transcript.md' : 'transcript.partial.md';
-  await fsp.writeFile(path.join(dir, transcriptName), text);
+  if (!empty) await fsp.writeFile(path.join(dir, transcriptName), text);
 
   // Update the meeting record before deleting anything.
   const metaPath = path.join(dir, 'meeting.json');
@@ -383,7 +402,7 @@ export async function transcribeMeeting(dir, opts = {}) {
     echoesSuppressed: { count: suppressed.length, segments: suppressed },
     wallSeconds: +(wallMs / 1000).toFixed(1),
     realtimeFactor: audioSeconds ? +(audioSeconds / (wallMs / 1000)).toFixed(2) : null,
-    complete: allOk,
+    complete: allOk && !empty,
     perTrack: results.map((r) => ({
       speaker: r.speaker,
       ok: r.ok,
@@ -394,27 +413,38 @@ export async function transcribeMeeting(dir, opts = {}) {
     })),
   };
 
-  // Only discard audio when BOTH tracks succeeded. A crashed worker means the
-  // transcript is incomplete, and the audio is the only way to try again.
-  if (allOk && !keepAudio) {
+  // Only discard audio when BOTH tracks succeeded AND something was recognised.
+  // A crashed worker or an empty result means there is nothing usable to keep,
+  // and the wavs are the only way to try again: the renderer freed its buffers
+  // at save time.
+  if (allOk && !empty && !keepAudio) {
     for (const t of present) await fsp.rm(t.wav, { force: true });
     meta.audioDisposition = 'deleted after successful transcription';
     log(`   audio deleted (${present.length} files)`);
+  } else if (keepAudio) {
+    meta.audioDisposition = 'kept, --keep-audio';
+    log('   audio KEPT, --keep-audio');
+  } else if (empty) {
+    meta.audioDisposition = 'kept, nothing was recognised, so no transcript was written';
+    log('   audio KEPT, nothing was recognised');
   } else {
-    meta.audioDisposition = keepAudio
-      ? 'kept, --keep-audio'
-      : 'kept, a worker failed, so the transcript may be incomplete';
-    log(`   audio KEPT, ${allOk ? '--keep-audio' : 'a worker failed'}`);
+    meta.audioDisposition = 'kept, a worker failed, so the transcript may be incomplete';
+    log('   audio KEPT, a worker failed');
   }
 
   await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
 
   const rtf = meta.transcript.realtimeFactor;
   log(
-    `   → ${transcriptName} · ${count} utterances · ${(wallMs / 1000).toFixed(1)}s` +
+    `   → ${empty ? 'nothing recognised, no transcript written' : transcriptName} · ` +
+      `${count} utterances · ${(wallMs / 1000).toFixed(1)}s` +
       (rtf ? ` (${rtf}x realtime)` : '')
   );
-  return { dir, count, meta, ok: allOk };
+  // ok must not be true for a run that recognised nothing, or every caller
+  // reports success over an empty result. `empty` says which of the two
+  // failures it was, so the UI can tell the user the audio was kept.
+  const ok = allOk && !empty;
+  return { dir, count, meta, ok, empty, audioKept: !(ok && !keepAudio) };
 }
 
 /* --------------------------------------------------------------------- main */

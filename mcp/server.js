@@ -196,7 +196,9 @@ server.registerTool(
       'write-up. Speakers are labelled "You" (the user) and "Them" (everyone else on the call). ' +
       'Accepts a folder name or part of the title.',
     inputSchema: {
-      meeting: z.string().describe('Folder name (e.g. 2026-09-03-1400-vendor-sync) or part of the title'),
+      // min(1) because an empty needle substring-matches every meeting: with one
+      // meeting on disk that silently resolves to it rather than erroring.
+      meeting: z.string().min(1).describe('Folder name (e.g. 2026-09-03-1400-vendor-sync) or part of the title'),
       include_transcript: z.boolean().default(true).describe('Set false for just the notes and metadata'),
     },
   },
@@ -248,6 +250,16 @@ server.registerTool(
   }
 );
 
+/**
+ * Upper bound on a saved write-up. A long one is a few kilobytes, so this sits
+ * three orders of magnitude clear of any real note and can only ever catch a
+ * client that has gone wrong: a runaway generation, or a model talked by meeting
+ * text into dumping something large into the user's folder. Bounded because this
+ * is the one write an outside AI client drives, and an unbounded one is a way to
+ * fill a disk without ever tripping the containment check.
+ */
+const MAX_WRITEUP_BYTES = 2 * 1024 * 1024;
+
 server.registerTool(
   'save_writeup',
   {
@@ -257,7 +269,7 @@ server.registerTool(
       'it. Call this after writing one up so the user does not have to copy it back by hand. ' +
       'This overwrites any previous write-up for that meeting.',
     inputSchema: {
-      meeting: z.string().describe('Folder name or part of the title'),
+      meeting: z.string().min(1).describe('Folder name or part of the title'),
       content: z.string().min(1).describe('The finished write-up, in markdown'),
     },
   },
@@ -265,6 +277,15 @@ server.registerTool(
     const m = await findMeeting(meeting);
     const clean = content.trim();
     if (!clean) throw new Error('Refusing to save an empty write-up.');
+
+    const bytes = Buffer.byteLength(clean, 'utf8');
+    if (bytes > MAX_WRITEUP_BYTES) {
+      throw new Error(
+        `Refusing to save ${bytes.toLocaleString()} bytes to ${m.id}/note.md: write-ups are ` +
+          `capped at ${MAX_WRITEUP_BYTES.toLocaleString()} bytes. A meeting write-up is a few ` +
+          `kilobytes, so something has gone wrong upstream. Nothing was written.`
+      );
+    }
 
     await fsp.writeFile(await writableInMeetings(path.join(m.dir, 'note.md')), clean + '\n');
 

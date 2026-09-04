@@ -82,11 +82,13 @@ function createWindow() {
     // window appearing and the first paint.
     backgroundColor: '#ffffff',
     alwaysOnTop: true,
+    // sandbox is left at Electron's default, on. That constrains preload.cjs:
+    // it must stay CommonJS and stay on Electron's renderer-safe exports, since
+    // a sandboxed preload cannot require arbitrary Node modules.
     webPreferences: {
       preload: path.join(HERE, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
     },
   });
 
@@ -270,6 +272,8 @@ ipcMain.handle('transcribe', async (_evt, dir) => {
     return {
       count: r.count,
       ok: r.ok,
+      empty: r.empty,
+      audioKept: r.audioKept,
       echoes: r.meta?.transcript?.echoesSuppressed?.count ?? 0,
       failed: (r.meta?.transcript?.perTrack ?? []).filter((t) => !t.ok).map((t) => t.speaker),
     };
@@ -432,12 +436,25 @@ ipcMain.handle('set-always-on-top', (_evt, on) => {
 
 /* --------------------------------------------------------------------- app */
 
-app.whenReady().then(() => {
-  createWindow();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+// The inFlight coalescing above only holds within one process, so a second copy
+// of MIN defeats it outright and both runs race the same meeting's files. One
+// instance only: a second launch gives its window back to the copy already open.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.focus();
   });
-});
+
+  app.whenReady().then(() => {
+    createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

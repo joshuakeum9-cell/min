@@ -1,0 +1,18 @@
+{
+  "parakeet-v2/encoder.int8.onnx": "a32b12d17bbbc309d0686fbbcc2987b5e9b8333a7da83fa6b089f0a2acd651ab",
+  "parakeet-v2/decoder.int8.onnx": "b6bb64963457237b900e496ee9994b59294526439fbcc1fecf705b31a15c6b4e",
+  "parakeet-v2/joiner.int8.onnx": "7946164367946e7f9f29a122407c3252b680dbae9a51343eb2488d057c3c43d2",
+  "parakeet-v2/tokens.txt": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d",
+  "parakeet-v2/test_wavs/0.wav": "5fceacff0315d49cb59fcc505bcecf1ed5f2f35c2897b1e65a59f30e5d922150",
+  "parakeet-v3/encoder.int8.onnx": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+  "parakeet-v3/decoder.int8.onnx": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+  "parakeet-v3/joiner.int8.onnx": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+  "parakeet-v3/tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+  "parakeet-v3/test_wavs/en.wav": "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6",
+  "parakeet-v3/test_wavs/de.wav": "36d3c4845b9808a1656a2a2e92d884590e2db94389e6fe559643291ae0cd3710",
+  "parakeet-v3/test_wavs/es.wav": "49fd2cfa4b62db7068143c582b35de9d31ec2733495ece3611105131d21de06c",
+  "parakeet-v3/test_wavs/fr.wav": "b59be4349b92d344fb903677165eaf4694025d1ab119c608726ecbcb3164b528",
+  "silero-vad": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+  "qwen3-4b": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+  "qwen3-1.7b": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897"
+}

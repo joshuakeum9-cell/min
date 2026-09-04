@@ -9,8 +9,10 @@ already pay for, by clipboard or by a Claude Desktop extension, and that is the 
 point at which anything leaves your machine.
 
 > **Measured:** throughput, the hard chunk ceiling, loopback continuity through silence,
-> speech memory. All of it on one machine, the developer's desktop, which every file in
-> Every `results/*.json` marks `"validTestBed": false`. Treat every figure below as an upper bound.
+> speech memory. All of it on one machine, the developer's desktop, which every
+> `results/*.json` warns is not the target hardware: three of the four mark
+> `"validTestBed": false`, and the fourth, the chunk-limit run, carries the same
+> warnings without writing that field. Treat every figure below as an upper bound.
 >
 > **Not measured: the quality gate has never been run.** [`m0/README.md`](m0/README.md)
 > sets it at 7 of 10 counterfactual pairs correctly identified by a blind reader, and
@@ -64,6 +66,10 @@ Get-FileHash "MIN-Setup.exe" -Algorithm SHA256
 # 94baabd2385fc65520bb25455d2dff13e1d70940bf95b99c4906de374a468229, 118,101,516 bytes
 ```
 
+That hash is published here and on the same release page as the file it describes, so it catches a
+corrupted or truncated download but not a substituted one, and it is no substitute for a
+code signature.
+
 **Windows will warn you.** The installer is unsigned, because a code-signing certificate
 costs money and this is a personal project given away for free. You will see a blue
 "Windows protected your PC" screen: click **More info**, then **Run anyway**. Some
@@ -99,8 +105,9 @@ sanctioned route.
 
 **On which machine.** An AMD Ryzen 5 5600G, 6 physical cores, 15.3 GB RAM, Windows, Node 24,
 CPU backend forced. `m0/lib/hardware.js` refuses to call that a valid test bed: every
-`results/*.json` carries `"validTestBed": false` and warns the desktop is roughly 1.5x
-faster than the median laptop, with more RAM than the 8 GB target. So the honest headline
+`results/*.json` warns the desktop is roughly 1.5x faster than the median laptop, with
+more RAM than the 8 GB target, and three of the four also carry `"validTestBed": false`,
+the chunk-limit run being the one that does not write the field. So the honest headline
 is about 10x to 13x realtime, roughly 4.5 to 6 minutes per hour of audio on that desktop,
 and dividing by that 1.5x puts a 4-core laptop at roughly 7 to 9 minutes per hour.
 Nothing has been re-run on the 4-core, 8 GB machine the gate calls for, and results land
@@ -115,7 +122,7 @@ outside it, in `%APPDATA%\MIN`, or `C:\Users\<you>\AppData\Roaming\MIN`.
 | Path under `%APPDATA%\MIN` | What it holds |
 |---|---|
 | `index.db` | The search index, SQLite FTS5. Not a list of keywords: `app/library.js` writes the title, the notes you typed, the **full transcript** and the **full write-up** of every meeting into it as plaintext. A complete, readable, greppable duplicate of every meeting you have recorded, sitting outside your Meetings folder. |
-| `mcp-index.db` | The Claude Desktop extension's own copy of that index, written by `mcp/server.js`, so with the extension installed this folder holds two full plaintext copies of every meeting. Separate file so the two processes never rebuild one database at the same time. Earlier builds wrote it to `%TEMP%`; `mcp/server.js` deletes that old `min-mcp-index.db` on startup if it finds one. |
+| `mcp-index.db` | The Claude Desktop extension's own copy of that index, written by `mcp/server.js`, so with the extension installed this folder holds two full plaintext copies of every meeting. Separate file so the two processes never rebuild one database at the same time. |
 | `models\` | The speech models, 642 MiB. |
 | the rest | Electron's own GPU, network and cache directories. |
 
@@ -143,12 +150,14 @@ node m0/eval-counterfactual.js --make-fixtures  # needs a human: 10 real meeting
 ```
 
 [`m0/README.md`](m0/README.md) has the spike detail and the gates. The benchmarks fetch a
-development manifest, about 4.6 GB into `models/`, checksum-pinned on arrival: that
-figure includes the Qwen3 models `m0/` measures and the shipped app never fetches, where
-a user's install downloads 642 MiB. `rm -rf models node_modules fixtures/*.wav` frees
-about 5.9 GB. Keep `results/` and `fixtures/meetings/`, the measurement record and your
-real transcripts, and keep the repo out of OneDrive or any synced folder: sync locks
-cause build failures.
+development manifest, about 4.6 GB into `models/`: that figure includes the Qwen3 models
+`m0/` measures and the shipped app never fetches, where a user's install downloads
+642 MiB. Every model file has a SHA-256 that ships inside the app, in
+`m0/lib/models.pins.json`, and each download is checked against its pin before the file
+is used: a mismatch is refused, so a changed or substituted download is caught rather
+than trusted. `rm -rf models node_modules fixtures/*.wav` frees about 5.9 GB. Keep
+`results/` and `fixtures/meetings/`, the measurement record and your real transcripts,
+and keep the repo out of OneDrive or any synced folder: sync locks cause build failures.
 
 ## Prior art
 

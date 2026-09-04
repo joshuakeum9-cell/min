@@ -25,14 +25,64 @@ export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
 
 /* ------------------------------------------------------------------ reading */
 
+/**
+ * Per-file ceiling for the text we will pull into the main process. README puts
+ * 1,000 hours of transcripts at about 95 MB in total, so a single file of 8 MB is
+ * already roughly 80 hours of talking and far outside anything this app writes.
+ * Above the ceiling the read is worth avoiding twice over: it buffers the whole
+ * file into the main process, and past V8's max string length it throws, which a
+ * bare catch would turn into an empty meeting rather than a visible problem.
+ */
+const MAX_TEXT_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Read one text file, refusing anything over the ceiling. Returns a status so the
+ * caller can tell "not there" (normal, an untranscribed meeting has no
+ * transcript.md) from "there but unreadable", which a bare catch collapsed into
+ * the same null.
+ */
+async function readCapped(file) {
+  let info;
+  try {
+    info = await fsp.stat(file);
+  } catch (err) {
+    if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return { text: null, status: 'absent' };
+    return { text: null, status: 'unreadable' };
+  }
+  if (info.size > MAX_TEXT_BYTES) return { text: null, status: 'oversized' };
+  try {
+    return { text: await fsp.readFile(file, 'utf8'), status: 'ok' };
+  } catch {
+    return { text: null, status: 'unreadable' };
+  }
+}
+
 /** Read one meeting folder into a plain object. Missing pieces are nulls, not errors. */
 export async function readMeeting(dir) {
-  const [metaRaw, notes, transcript, note] = await Promise.all([
-    fsp.readFile(path.join(dir, 'meeting.json'), 'utf8').catch(() => null),
-    fsp.readFile(path.join(dir, 'my-notes.md'), 'utf8').catch(() => ''),
-    fsp.readFile(path.join(dir, 'transcript.md'), 'utf8').catch(() => null),
-    fsp.readFile(path.join(dir, 'note.md'), 'utf8').catch(() => null),
+  const [metaRes, notesRes, transcriptRes, noteRes] = await Promise.all([
+    readCapped(path.join(dir, 'meeting.json')),
+    readCapped(path.join(dir, 'my-notes.md')),
+    readCapped(path.join(dir, 'transcript.md')),
+    readCapped(path.join(dir, 'note.md')),
   ]);
+
+  // Anything the UI should be able to explain instead of rendering as empty.
+  const fileIssues = {};
+  for (const [field, res] of [
+    ['meta', metaRes],
+    ['notes', notesRes],
+    ['transcript', transcriptRes],
+    ['note', noteRes],
+  ]) {
+    if (res.status !== 'ok' && res.status !== 'absent') fileIssues[field] = res.status;
+  }
+  const hasIssues = Object.keys(fileIssues).length > 0;
+
+  const metaRaw = metaRes.text;
+  const notes = notesRes.text ?? '';
+  const transcript = transcriptRes.text;
+  const note = noteRes.text;
+
   // A folder whose meeting.json is missing or corrupt still holds the notes and
   // transcript, which are the stated source of truth. Returning null here made
   // the whole meeting vanish from the list AND from search, hiding the very
@@ -43,7 +93,9 @@ export async function readMeeting(dir) {
   } catch { /* fall through to the reconstructed record */ }
 
   if (!meta) {
-    if (transcript === null && !notes && note === null) return null;
+    // A folder we could not read is not the same as an empty folder: dropping it
+    // here would hide the problem the same way an empty meeting does.
+    if (transcript === null && !notes && note === null && !hasIssues) return null;
     const stamp = path.basename(dir).match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})-(.*)$/);
     meta = {
       title: stamp ? stamp[6].replace(/-/g, ' ') : path.basename(dir),
@@ -73,6 +125,8 @@ export async function readMeeting(dir) {
     transcribed: Boolean(transcript),
     written: Boolean(note),
     meta,
+    // Only present when something went wrong, so a healthy record keeps its shape.
+    ...(hasIssues ? { fileIssues } : null),
   };
 }
 
@@ -119,6 +173,11 @@ export async function reindex(dbPath) {
   const d = openIndex(dbPath);
   const meetings = await listMeetings();
 
+  // The ceiling is repeated here because the rebuild runs inside one transaction:
+  // a single oversized value would abort the whole index, not just its own row.
+  // Dropped rather than truncated, so half a document cannot pass for a whole one.
+  const capped = (t) => ((t ?? '').length > MAX_TEXT_BYTES ? '' : t);
+
   // U+0001/U+0002 mark snippet boundaries, so strip any that occur naturally.
   const clean = (t) => (t ?? '').replaceAll('\u0001', '').replaceAll('\u0002', '');
 
@@ -131,7 +190,14 @@ export async function reindex(dbPath) {
       'INSERT INTO docs (id, dir, title, notes, transcript, note) VALUES (?, ?, ?, ?, ?, ?)'
     );
     for (const m of meetings) {
-      insert.run(m.id, m.dir, clean(m.title), clean(m.notes), clean(m.transcript), clean(m.note));
+      insert.run(
+        m.id,
+        m.dir,
+        clean(capped(m.title)),
+        clean(capped(m.notes)),
+        clean(capped(m.transcript)),
+        clean(capped(m.note))
+      );
     }
     d.exec('COMMIT');
   } catch (err) {

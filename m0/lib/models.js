@@ -7,9 +7,14 @@
  * bz2, which Windows' bundled bsdtar does not reliably do. Per-file downloads
  * resume, verify individually, and are what the shipping app should do anyway.
  *
- * Sizes were read from the HuggingFace API on 2026-09-02. Checksums are recorded
- * on first successful download into models.lock.json and enforced on every run
- * after that, so a silently-changed upstream is caught rather than trusted.
+ * Sizes were read from the HuggingFace API on 2026-09-02. Integrity comes from
+ * models.pins.json, which ships inside the app next to this file and holds the
+ * sha256 the release was built against. That is the authority: a download whose
+ * hash does not match it is refused, and a key with no pin is refused too.
+ * models.lock.json lives in the writable models directory and is only a
+ * size+mtime cache, so a 652 MB encoder is not re-hashed before every
+ * transcription. It grants nothing on its own, since a fresh install starts with
+ * no lock file at all and an attacker-writable one must not be able to pin.
  */
 
 import fs from 'node:fs';
@@ -32,6 +37,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MODELS_DIR =
   process.env.MIN_MODELS_DIR || path.resolve(HERE, '../../models');
 const LOCK_FILE = path.join(MODELS_DIR, 'models.lock.json');
+
+/**
+ * Shipped checksums, read from the source tree rather than from MODELS_DIR.
+ * MODELS_DIR is a per-user directory that starts empty, so anything read from
+ * there is written by whoever downloaded the models and cannot vouch for them.
+ * build.files already ships the whole of m0/lib, so this file travels inside the
+ * asar alongside the code it protects.
+ */
+const PINS = JSON.parse(fs.readFileSync(path.join(HERE, 'models.pins.json'), 'utf8'));
 
 /**
  * Resolve against an immutable commit, never `main`.
@@ -83,6 +97,10 @@ export const MANIFEST = {
   'silero-vad': {
     kind: 'file',
     note: 'Voice activity detection. Skips silence before it ever reaches the recogniser.',
+    // This is a GitHub release asset on a mutable tag, so unlike the HuggingFace
+    // entries there is no revision to pin and the bytes behind this URL can be
+    // replaced in place. Its entry in models.pins.json is the only thing that
+    // makes that detectable.
     url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx',
     file: 'silero_vad_v5.onnx',
     bytes: 2313101,
@@ -250,13 +268,19 @@ async function download(url, dest, expectedBytes, label, onProgress) {
 async function verifyOrPin(key, file, lock) {
   const st = await fsp.stat(file);
   const rec = lock[key];
+  const shipped = PINS[key];
 
   // Hashing the 652 MB encoder before every transcription costs seconds of dead
   // time behind a "Transcribing..." message. If size and mtime are unchanged
-  // since the pin, the bytes are unchanged. Existing pins self-upgrade on the
-  // first run after this, and MIN_VERIFY_MODELS=1 forces a full check.
+  // since the last check, the bytes are unchanged, so the cached digest stands in
+  // for a re-hash. The cached digest must still equal the shipped pin to be
+  // usable: otherwise a models.lock.json poisoned before this release, or by
+  // anything with write access to the models directory, would keep winning the
+  // fast path forever. MIN_VERIFY_MODELS=1 forces a full check.
   if (
     rec?.sha256 &&
+    shipped &&
+    rec.sha256 === shipped &&
     rec.size === st.size &&
     rec.mtimeMs === st.mtimeMs &&
     !process.env.MIN_VERIFY_MODELS
@@ -265,13 +289,23 @@ async function verifyOrPin(key, file, lock) {
   }
 
   const digest = await sha256File(file);
-  const pinned = rec?.sha256;
-  if (pinned && pinned !== digest) {
+  if (shipped && shipped !== digest) {
     throw new Error(
-      `${key}: checksum changed since it was pinned.\n` +
-        `  pinned  ${pinned}\n  now     ${digest}\n` +
-        `Upstream republished this file. Review it before trusting it, then remove ` +
-        `the entry from models.lock.json to re-pin.`
+      `${key}: checksum mismatch.\n` +
+        `  file     ${file}\n` +
+        `  expected ${shipped}\n  got      ${digest}\n` +
+        `The download does not match the checksum this release was built against, ` +
+        `so it will not be loaded. Delete the file and re-run to fetch it again; if ` +
+        `it keeps mismatching, upstream republished it and it needs review.`
+    );
+  }
+  if (!shipped && !process.env.MIN_ALLOW_UNPINNED) {
+    // The escape hatch is for the maintainer: add a MANIFEST entry, run once with
+    // MIN_ALLOW_UNPINNED=1 to fetch and hash it, then copy the resulting sha256
+    // into models.pins.json so everyone else gets it enforced.
+    throw new Error(
+      `${key}: no checksum shipped for this file in models.pins.json, refusing to ` +
+        `load it. Set MIN_ALLOW_UNPINNED=1 to fetch it once and generate its pin.`
     );
   }
   lock[key] = {
