@@ -40,12 +40,12 @@ function createWindow() {
       const sources = await desktopCapturer.getSources({ types: ['screen'] });
       callback({
         video: sources[0],
-        // 'loopback'          — whole-system audio, including our own output
-        // 'loopbackWithMute'  — system audio with local playback muted
+        // 'loopback'         , whole-system audio, including our own output
+        // 'loopbackWithMute' , system audio with local playback muted
         audio: 'loopback',
       });
     },
-    // useSystemPicker: false — we choose the source ourselves.
+    // useSystemPicker: false, we choose the source ourselves.
     { useSystemPicker: false }
   );
 

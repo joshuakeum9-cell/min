@@ -1,13 +1,13 @@
 /**
- * Taonim · M2 — transcription.
+ * Taonim · M2, transcription.
  *
  * Takes a meeting folder produced by the recorder and turns the two audio tracks
  * into one interleaved transcript with speaker attribution.
  *
  * The attribution is free and exact. Because the microphone and the system
- * loopback were captured as separate tracks against one clock — and because
+ * loopback were captured as separate tracks against one clock, and because
  * Chromium zero-fills the loopback through silence, so the two stay
- * sample-aligned — "who said this" is just "which file did it come from". No
+ * sample-aligned, "who said this" is just "which file did it come from". No
  * diarization model, no clustering, no guessing.
  *
  * Both tracks are transcribed concurrently in separate processes. That is not
@@ -82,7 +82,7 @@ function runWorker({ wav, speaker, modelDir, vadModel, threads, onProgress }) {
         ok: exitCode === 0 && !workerError,
         // A native abort is the case where the process died with NO in-band
         // error message. An error we were told about is a clean failure, however
-        // fatal — conflating the two makes meeting.json untriageable.
+        // fatal, conflating the two makes meeting.json untriageable.
         crashed: exitCode !== 0 && workerError === null,
         error: workerError,
         exitCode,
@@ -167,7 +167,7 @@ const norm = (t) =>
  *
  * Short utterances are refused outright. "No.", "Exactly", "Yeah" are trivially
  * contained in almost any longer sentence, and suppressing one deletes the user
- * disagreeing — turning a transcript of an argument into a record of consent.
+ * disagreeing, turning a transcript of an argument into a record of consent.
  * A line that short carries no evidence either way, so it is never evidence of
  * an echo.
  */
@@ -198,7 +198,7 @@ export function suppressBleed(segments, { similarity = BLEED_SIMILARITY } = {}) 
 
     const echoOf = them.find((t) => {
       // A real echo is the same sound arriving twice, so it must actually
-      // overlap in time — not merely start nearby. Onset proximity alone lets a
+      // overlap in time, not merely start nearby. Onset proximity alone lets a
       // reply land inside the window and be deleted as its own echo.
       const overlap = Math.min(s.end, t.end) - Math.max(s.start, t.start);
       if (overlap < dur * 0.8 - BLEED_SLOP_SECONDS) return false;
@@ -336,7 +336,7 @@ export async function transcribeMeeting(dir, opts = {}) {
   // Decide success BEFORE writing anything. A partial transcript written to the
   // canonical name marks the meeting done forever: library.js treats any
   // transcript.md as finished, the GUI stops offering to retry, and --all skips
-  // the folder — while the other speaker's half is simply missing.
+  // the folder, while the other speaker's half is simply missing.
   const allOk = results.every((r) => r.ok);
 
   const { text, count, suppressed } = buildTranscript(results, {

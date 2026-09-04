@@ -6,7 +6,7 @@
  *  1. Parakeet does NOT fail gracefully on long audio. Past a ceiling, the
  *     encoder's self-attention raises an onnxruntime broadcast error.
  *  2. That error is a NATIVE ABORT, not a catchable JS exception. A try/catch
- *     around the decode call does not save you — the process dies. So the real
+ *     around the decode call does not save you, the process dies. So the real
  *     app must run ASR in a child process, and must never send an over-long
  *     chunk in the first place.
  *  3. Throughput degrades with chunk length (attention is quadratic), so short

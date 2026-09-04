@@ -1,0 +1,82 @@
+{
+  "parakeet-v2/encoder.int8.onnx": {
+    "sha256": "a32b12d17bbbc309d0686fbbcc2987b5e9b8333a7da83fa6b089f0a2acd651ab",
+    "pinnedAt": "2026-09-02T23:18:57.596Z"
+  },
+  "parakeet-v2/decoder.int8.onnx": {
+    "sha256": "b6bb64963457237b900e496ee9994b59294526439fbcc1fecf705b31a15c6b4e",
+    "pinnedAt": "2026-09-02T23:18:57.617Z"
+  },
+  "parakeet-v2/joiner.int8.onnx": {
+    "sha256": "7946164367946e7f9f29a122407c3252b680dbae9a51343eb2488d057c3c43d2",
+    "pinnedAt": "2026-09-02T23:18:57.624Z"
+  },
+  "parakeet-v2/tokens.txt": {
+    "sha256": "ec182b70dd42113aff6c5372c75cac58c952443eb22322f57bbd7f53977d497d",
+    "pinnedAt": "2026-09-02T23:18:57.625Z"
+  },
+  "parakeet-v2/test_wavs/0.wav": {
+    "sha256": "5fceacff0315d49cb59fcc505bcecf1ed5f2f35c2897b1e65a59f30e5d922150",
+    "pinnedAt": "2026-09-02T23:18:57.626Z"
+  },
+  "qwen3-1.7b": {
+    "sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+    "pinnedAt": "2026-09-02T23:19:26.997Z"
+  },
+  "qwen3-4b": {
+    "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+    "pinnedAt": "2026-09-02T23:20:12.095Z"
+  },
+  "parakeet-v3/encoder.int8.onnx": {
+    "sha256": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+    "size": 652184281,
+    "mtimeMs": 1788391226626.6975,
+    "pinnedAt": "2026-09-02T23:20:30.230Z"
+  },
+  "parakeet-v3/decoder.int8.onnx": {
+    "sha256": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+    "size": 11845275,
+    "mtimeMs": 1788391227404.5479,
+    "pinnedAt": "2026-09-02T23:20:30.255Z"
+  },
+  "parakeet-v3/joiner.int8.onnx": {
+    "sha256": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+    "size": 6355277,
+    "mtimeMs": 1788391227650.7043,
+    "pinnedAt": "2026-09-02T23:20:30.282Z"
+  },
+  "parakeet-v3/tokens.txt": {
+    "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+    "size": 93939,
+    "mtimeMs": 1788391227819.1887,
+    "pinnedAt": "2026-09-02T23:20:30.283Z"
+  },
+  "parakeet-v3/test_wavs/en.wav": {
+    "sha256": "148b936b43ce7c546a866e64da059f0458aee2d65e617f16e9d94f06e8d99ed6",
+    "size": 184608,
+    "mtimeMs": 1788391228161.8557,
+    "pinnedAt": "2026-09-02T23:20:30.284Z"
+  },
+  "parakeet-v3/test_wavs/de.wav": {
+    "sha256": "36d3c4845b9808a1656a2a2e92d884590e2db94389e6fe559643291ae0cd3710",
+    "size": 121388,
+    "mtimeMs": 1788391228450.938,
+    "pinnedAt": "2026-09-02T23:20:30.285Z"
+  },
+  "parakeet-v3/test_wavs/es.wav": {
+    "sha256": "49fd2cfa4b62db7068143c582b35de9d31ec2733495ece3611105131d21de06c",
+    "size": 235052,
+    "mtimeMs": 1788391228659.235,
+    "pinnedAt": "2026-09-02T23:20:30.285Z"
+  },
+  "parakeet-v3/test_wavs/fr.wav": {
+    "sha256": "b59be4349b92d344fb903677165eaf4694025d1ab119c608726ecbcb3164b528",
+    "size": 219180,
+    "mtimeMs": 1788391228932.6333,
+    "pinnedAt": "2026-09-02T23:20:30.286Z"
+  },
+  "silero-vad": {
+    "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+    "pinnedAt": "2026-09-03T00:55:32.942Z"
+  }
+}

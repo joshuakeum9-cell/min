@@ -1,5 +1,5 @@
 /**
- * Taonim · M1 — the recorder.
+ * Taonim · M1, the recorder.
  *
  * Main process. Owns the window, the loopback grant, and everything that touches
  * disk. The renderer captures audio and hands over finished PCM; it never writes
@@ -22,6 +22,45 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
 
+/**
+ * Every filesystem path in this file arrives as a plain string over IPC, and
+ * the main process cannot tell one the UI produced from one a compromised
+ * renderer invented. Two handlers hand that string straight to the OS with the
+ * user's own privileges: shell.openPath is ShellExecute on Windows, so a path
+ * to an .exe, .bat or .lnk gets run, and shell.trashItem recurses through a
+ * directory. Nothing here acts on a path until it resolves to something strictly
+ * inside MEETINGS_DIR.
+ *
+ * The root itself is a special case, and it is only ever allowed on request.
+ * open-folder needs it, because opening the library is exactly what its button
+ * does. delete-meeting must not have it: one IPC call naming the root would
+ * otherwise send every meeting the user owns to the recycle bin, so it takes the
+ * default and only accepts a folder below the root.
+ *
+ * The trailing separator is the whole point of the prefix test: without it a
+ * sibling folder named MeetingsEvil passes as inside Meetings. The comparison
+ * is folded on Windows because the filesystem is case-insensitive.
+ *
+ * path.resolve collapses ".." but does not follow links, so a junction planted
+ * inside the folder would still pass. Planting one already needs write access
+ * to the user's disk.
+ */
+const ROOT = path.resolve(MEETINGS_DIR);
+const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+
+function confine(p, { allowRoot = false } = {}) {
+  if (typeof p !== 'string' || !p.trim()) throw new Error('No meeting folder given.');
+  const full = path.resolve(p);
+  if (fold(full) === fold(ROOT)) {
+    if (allowRoot) return full;
+    throw new Error(`Refused: ${full} is the whole meetings library, not one meeting.`);
+  }
+  if (!fold(full).startsWith(fold(ROOT) + path.sep)) {
+    throw new Error(`Refused: ${full} is outside ${ROOT}.`);
+  }
+  return full;
+}
+
 // Point the model loader at a writable per-user directory before anything
 // imports it. Inside a packaged app the source tree is a read-only asar.
 if (!process.env.TAONIM_MODELS_DIR) {
@@ -39,7 +78,9 @@ function createWindow() {
     minWidth: 360,
     minHeight: 420,
     title: 'Taonim',
-    backgroundColor: '#101312',
+    // The renderer's --canvas. Anything else flashes in the gap between the
+    // window appearing and the first paint.
+    backgroundColor: '#ffffff',
     alwaysOnTop: true,
     webPreferences: {
       preload: path.join(HERE, 'preload.cjs'),
@@ -50,7 +91,7 @@ function createWindow() {
   });
 
   // Grant system-audio loopback. Without a handler, getDisplayMedia is refused
-  // outright. The 4x4 video track is discarded immediately in the renderer — it
+  // outright. The 4x4 video track is discarded immediately in the renderer, it
   // exists only because an audio-only display capture is not permitted.
   session.defaultSession.setDisplayMediaRequestHandler(
     async (request, callback) => {
@@ -135,8 +176,14 @@ async function uniqueDir(base) {
 ipcMain.handle('save-meeting', async (_evt, payload) => {
   const { startedAt, endedAt, title, notes, sampleRate, mic, system, timeline } = payload;
 
+  // Built from a slug here rather than taken from the renderer, but it goes
+  // through the same gate, and the gate runs before anything is created so no
+  // filesystem call below acts on an unchecked path. uniqueDir only appends a
+  // counter to this name, so whatever folder it settles on has the checked parent.
+  const base = confine(path.join(MEETINGS_DIR, folderName(startedAt, title)));
+
   await fsp.mkdir(MEETINGS_DIR, { recursive: true });
-  const dir = await uniqueDir(path.join(MEETINGS_DIR, folderName(startedAt, title)));
+  const dir = await uniqueDir(base);
 
   const micF32 = new Float32Array(mic.buffer, mic.byteOffset, mic.byteLength / 4);
   const sysF32 = new Float32Array(system.buffer, system.byteOffset, system.byteLength / 4);
@@ -160,7 +207,7 @@ ipcMain.handle('save-meeting', async (_evt, payload) => {
       system: trackMeta(sysF32, sampleRate, durationSeconds),
     },
     timeline,
-    audioDisposition: 'kept — delete after transcription succeeds',
+    audioDisposition: 'kept: delete after transcription succeeds',
     transcript: null,
   };
 
@@ -213,12 +260,12 @@ function trackMeta(samples, sampleRate, wallSeconds) {
 const inFlight = new Map();
 
 ipcMain.handle('transcribe', async (_evt, dir) => {
-  const key = path.resolve(dir);
+  const key = confine(dir);
   if (inFlight.has(key)) return inFlight.get(key);
 
   const job = (async () => {
     const { transcribeMeeting } = await import('./transcribe.js');
-    const r = await transcribeMeeting(dir, { threads: 4, quiet: true });
+    const r = await transcribeMeeting(key, { threads: 4, quiet: true });
     await reindexSoon();
     return {
       count: r.count,
@@ -234,7 +281,7 @@ ipcMain.handle('transcribe', async (_evt, dir) => {
 
 ipcMain.handle('copy-prompt', async (_evt, dir) => {
   const { promptForMeeting } = await import('./prompt.js');
-  const { text } = await promptForMeeting(dir);
+  const { text } = await promptForMeeting(confine(dir));
   clipboard.writeText(text);
   return { words: text.split(/\s+/).length };
 });
@@ -261,7 +308,7 @@ ipcMain.handle('list-meetings', async () => {
 
 ipcMain.handle('read-meeting', async (_evt, dir) => {
   const { readMeeting } = await import('./library.js');
-  return readMeeting(dir);
+  return readMeeting(confine(dir));
 });
 
 /**
@@ -286,14 +333,15 @@ let indexReady = false;
 
 /** Save the write-up pasted back from the assistant. */
 ipcMain.handle('save-note', async (_evt, dir, text) => {
+  const target = confine(dir);
   const clean = (text ?? '').trim();
   if (!clean) throw new Error('Nothing to save.');
-  await fsp.writeFile(path.join(dir, 'note.md'), clean + '\n');
+  await fsp.writeFile(path.join(target, 'note.md'), clean + '\n');
 
   // The catch has to cover the parse too. Attached to the read alone, a transient
   // EBUSY yields '{}' and this write-back destroys the whole record while the UI
   // reports success.
-  const metaPath = path.join(dir, 'meeting.json');
+  const metaPath = path.join(target, 'meeting.json');
   let meta;
   try {
     meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
@@ -313,7 +361,7 @@ ipcMain.handle('save-note', async (_evt, dir, text) => {
  * a real conversation and the user may want it back.
  */
 ipcMain.handle('delete-meeting', async (_evt, dir) => {
-  await shell.trashItem(dir);
+  await shell.trashItem(confine(dir));
   await reindexSoon();
   return true;
 });
@@ -323,7 +371,7 @@ ipcMain.handle('delete-meeting', async (_evt, dir) => {
  *
  * This is the honest version of "log in to your AI account". Consumer
  * subscriptions expose no OAuth and no API to third-party apps, so the app never
- * touches credentials at all — it hands the browser a URL, where the user is
+ * touches credentials at all, it hands the browser a URL, where the user is
  * already signed in, and the prompt is already on their clipboard. Nothing to
  * configure, nothing to revoke, and it works with every provider equally.
  */
@@ -340,7 +388,7 @@ const PROVIDER_URLS = {
 
 ipcMain.handle('open-provider', async (_evt, id) => {
   const url = PROVIDER_URLS[id];
-  // Only ever open a URL from this fixed table — never one built from user or
+  // Only ever open a URL from this fixed table, never one built from user or
   // file content.
   if (!url) throw new Error(`Unknown provider: ${id}`);
   await shell.openExternal(url);
@@ -348,7 +396,26 @@ ipcMain.handle('open-provider', async (_evt, id) => {
 });
 
 ipcMain.handle('open-folder', async (_evt, dir) => {
-  await shell.openPath(dir ?? MEETINGS_DIR);
+  // The one caller allowed to name the library root: with no dir it opens the
+  // whole folder, which is the point of the button.
+  const target = confine(dir ?? MEETINGS_DIR, { allowRoot: true });
+
+  // Confinement alone is not enough here. openPath on a file runs it through
+  // the shell, so a .bat sitting in the meetings folder would execute on a
+  // click. Only ever open a directory.
+  let st;
+  try {
+    st = await fsp.stat(target);
+  } catch {
+    throw new Error(`Cannot open ${target}: it is not there.`);
+  }
+  if (!st.isDirectory()) throw new Error(`Refused: ${target} is not a folder.`);
+
+  // openPath reports failure by returning a message rather than throwing, and
+  // swallowing it left the button looking as though it had worked.
+  const err = await shell.openPath(target);
+  if (err) throw new Error(err);
+  return target;
 });
 
 ipcMain.handle('models-ready', async () => {

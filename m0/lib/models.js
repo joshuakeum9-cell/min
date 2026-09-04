@@ -4,7 +4,7 @@
  * Everything is fetched as individual files from HuggingFace rather than as
  * release tarballs. The tarballs work, but bzip2-decompressing 482 MB costs over
  * two minutes of pinned CPU, cannot resume, and needs a system `tar` that handles
- * bz2 — which Windows' bundled bsdtar does not reliably do. Per-file downloads
+ * bz2, which Windows' bundled bsdtar does not reliably do. Per-file downloads
  * resume, verify individually, and are what the shipping app should do anyway.
  *
  * Sizes were read from the HuggingFace API on 2026-09-02. Checksums are recorded
@@ -38,7 +38,7 @@ const LOCK_FILE = path.join(MODELS_DIR, 'models.lock.json');
  *
  * `main` is a moving ref. If upstream re-quantises a file, the manifest's byte
  * counts stop matching and every NEW install fails at first transcription with a
- * size mismatch — while existing installs keep working, because the size check
+ * size mismatch, while existing installs keep working, because the size check
  * short-circuits before the download. That makes it invisible to the developer
  * and fatal for everyone else, which is exactly backwards for a project whose
  * point is that other people can install it.
@@ -180,7 +180,7 @@ async function download(url, dest, expectedBytes, label, onProgress) {
     throw new Error(`${label}: HTTP ${res.status} ${res.statusText} for ${url}`);
   }
   if (have > 0 && res.status !== 206) {
-    // Server ignored our Range header — restart rather than corrupt the file.
+    // Server ignored our Range header, restart rather than corrupt the file.
     await fsp.rm(part, { force: true });
     have = 0;
   }
@@ -196,7 +196,7 @@ async function download(url, dest, expectedBytes, label, onProgress) {
   let seen = have;
   let lastTick = 0;
   const started = Date.now();
-  // Carriage-return progress is meaningless in a redirected log — skip it there.
+  // Carriage-return progress is meaningless in a redirected log, skip it there.
   const showProgress = expectedBytes > 8 * MiB && process.stdout.isTTY;
 
   try {
@@ -223,7 +223,7 @@ async function download(url, dest, expectedBytes, label, onProgress) {
     out.destroy();
     if (showProgress) process.stdout.write('\r' + ' '.repeat(86) + '\r');
     if (err?.code === 'ENOSPC') {
-      // The default message here would be "size mismatch — upstream may have
+      // The default message here would be "size mismatch, upstream may have
       // changed", which is an actively wrong diagnosis of a full disk.
       throw new Error(
         `${label}: out of disk space. Free some space and re-run — the partial ` +

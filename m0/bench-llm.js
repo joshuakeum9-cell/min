@@ -2,7 +2,7 @@
  * M0 · LLM prefill and generation benchmark.
  *
  * The research was explicit that this number is unmeasured: "the one number that
- * matters — CPU-only prefill and generation on a 4-core no-GPU laptop — appears
+ * matters, CPU-only prefill and generation on a 4-core no-GPU laptop, appears
  * nowhere."
  *
  * Design note, learned the hard way: the first version of this file did one
@@ -17,8 +17,8 @@
  * and the sweep stops rather than grinding on.
  *
  * The two costs are separate and scale differently:
- *   prefill    — reading the transcript. Grows with meeting length.
- *   generation — writing the note. Roughly fixed, ~800 tokens.
+ *   prefill   , reading the transcript. Grows with meeting length.
+ *   generation, writing the note. Roughly fixed, ~800 tokens.
  * A single combined number hides which half is the problem.
  *
  * Usage:
@@ -75,7 +75,7 @@ function buildTranscript(llm, targetTokens) {
   let text = '';
   let i = 0;
   let seconds = 0;
-  // Grow in blocks, then trim back — tokenizing every line would dominate the run.
+  // Grow in blocks, then trim back, tokenizing every line would dominate the run.
   while (llm.tokenize(text).length < targetTokens) {
     const block = [];
     for (let k = 0; k < 25; k++) {

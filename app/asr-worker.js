@@ -1,5 +1,5 @@
 /**
- * ASR worker — one child process per audio track.
+ * ASR worker, one child process per audio track.
  *
  * This runs in its own process for a specific, measured reason: past ~398 s of
  * audio Parakeet raises an onnxruntime error inside self-attention that is a
@@ -31,7 +31,7 @@ const THREADS = Math.max(1, parseInt(threadsArg ?? '4', 10));
 
 /**
  * Chunk ceiling. The hard wall is 398 s; measured throughput also falls sharply
- * as chunks grow (≈16x realtime at 15 s, ≈5x at 390 s), so short chunks are both
+ * as chunks grow (≈15x realtime at 15 s, ≈5.6x at 360 s), so short chunks are both
  * safer and faster. 30 s is comfortably inside both.
  */
 const MAX_CHUNK_SECONDS = 30;

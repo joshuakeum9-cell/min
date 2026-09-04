@@ -1,5 +1,5 @@
 /**
- * Builds taonim.mcpb — a one-click Claude Desktop extension.
+ * Builds taonim.mcpb, a one-click Claude Desktop extension.
  *
  * An .mcpb is a zip holding an MCP server plus a manifest, installed by
  * double-clicking it or dragging it onto Claude Desktop. That matters here
@@ -7,7 +7,7 @@
  * config file, which is not a feature anyone would actually use.
  *
  * Claude Desktop ships its own Node runtime on macOS and Windows, so the bundle
- * needs nothing installed on the user's machine — not even Node.
+ * needs nothing installed on the user's machine, not even Node.
  *
  * Run: npm run mcpb
  */
@@ -33,15 +33,30 @@ const manifest = {
   name: 'Taonim',
   display_name: 'Taonim meetings',
   version: pkg.version,
-  description: 'Read and write up your local meeting notes.',
+  // This is what Claude Desktop shows in the install dialog, and for most people
+  // it is the only thing they read before granting filesystem access. It has to
+  // name everything the extension touches, including the index, which is a
+  // plaintext copy of their meetings living outside the Meetings folder.
+  description:
+    'Reads the meetings in your Meetings folder and saves write-ups back into it. ' +
+    "Search builds an index of your meeting text in Taonim's own app data folder.",
   long_description:
     'Gives Claude direct access to the meetings recorded by Taonim: the notes you ' +
     'typed during each call, the transcript with speakers separated into you and them, and ' +
     'the finished write-up.\n\n' +
     'Ask for "a write-up of my 3pm call" and Claude reads the meeting off your disk and ' +
-    'saves the result straight back into its folder — no copying, no pasting, no API key.\n\n' +
-    'Everything stays on your machine. The extension only reads and writes files inside your ' +
-    'Meetings folder, and makes no network requests of its own.',
+    'saves the result straight back into its folder: no copying, no pasting, no API key.\n\n' +
+    'What it touches on disk. In each meeting folder it reads meeting.json, my-notes.md, ' +
+    'transcript.md and note.md, and writes note.md plus a timestamp in meeting.json. Your ' +
+    'recordings are never read. To make search fast ' +
+    'it also builds a full-text index holding the plaintext of every note, transcript and ' +
+    "write-up, and writes that index into Taonim's own application data folder: " +
+    '%APPDATA%\\Taonim\\mcp-index.db on Windows, ' +
+    '~/Library/Application Support/Taonim/mcp-index.db on macOS. The index is a cache, so you ' +
+    'can delete it at any time and the next search rebuilds it. Nothing outside those two ' +
+    'places is read or written, with one exception: on startup it deletes the index an ' +
+    'earlier build of this extension left in your temp folder.\n\n' +
+    'Everything stays on your machine, and the extension makes no network requests of its own.',
   author: { name: pkg.author ?? 'Joshua Keum' },
   license: pkg.license ?? 'MIT',
   keywords: ['meetings', 'notes', 'transcription', 'local-first'],
@@ -56,7 +71,10 @@ const manifest = {
   tools: [
     { name: 'list_meetings', description: 'List recorded meetings, newest first' },
     { name: 'read_meeting', description: 'Read one meeting: your notes, the transcript, any write-up' },
-    { name: 'search_meetings', description: 'Full-text search across every meeting' },
+    {
+      name: 'search_meetings',
+      description: 'Full-text search across every meeting, via an index in the app data folder',
+    },
     { name: 'save_writeup', description: 'Save a finished write-up into the meeting folder' },
     { name: 'writing_guidance', description: 'How the user wants meetings written up' },
   ],

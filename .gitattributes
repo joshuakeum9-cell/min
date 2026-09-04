@@ -1,0 +1,22 @@
+# Line endings are a repo guarantee, not a per-machine one.
+#
+# Every text file in this repo is stored LF in the index today, but only because
+# the machine it was authored on happens to have core.autocrlf=true set in its
+# system gitconfig. That is one developer's local setting, not a property of the
+# repo, so the next contributor to clone would commit CRLF and turn the first
+# shared edit into a whole-file diff. Normalise it here instead.
+* text=auto eol=lf
+
+# Binaries: never line-ending converted, never diffed as text.
+#
+# Only *.ico and *.png are tracked right now. The rest are listed because they
+# are the binary formats this project actually produces or vendors, and a single
+# CRLF substitution inside any of them is silent, total corruption: *.woff2 for
+# the fonts vendored into app/fonts/, *.exe for the NSIS installer, *.mcpb for
+# the Claude Desktop extension bundle, *.onnx for the models fetched at runtime.
+*.ico   binary
+*.png   binary
+*.woff2 binary
+*.exe   binary
+*.mcpb  binary
+*.onnx  binary

@@ -2,7 +2,7 @@
  * A small markdown renderer for the note views.
  *
  * Deliberately not a full parser. It covers exactly what a meeting write-up
- * contains — headings, lists, emphasis, code spans, blockquotes — because the
+ * contains, headings, lists, emphasis, code spans, blockquotes, because the
  * write-up is the thing the user actually reads, and showing them a literal
  * "# Timeline" makes the product look like a text dump.
  *

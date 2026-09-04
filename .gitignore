@@ -1,6 +1,12 @@
-# Models are fetched at runtime and checksum-pinned — never vendored.
-# ~4.6 GB, and their licences differ from this repo's.
-models/
+# Models are fetched at runtime and checksum-pinned, never vendored.
+# 4.7 GB here is the full development manifest, not a user download: a default
+# install fetches 642 MiB (Parakeet TDT 0.6B v3 plus Silero VAD). The Qwen3
+# GGUFs are benchmark-only, since the shipped app has no local LLM.
+# Their licences differ from this repo's.
+# Ignore the contents, not the directory: git cannot re-include a file whose
+# parent directory is excluded, so a bare "models/" here silently kills the
+# negation below.
+models/*
 
 # models.lock.json IS tracked: it pins the exact bytes each release was built
 # against, so a silently-changed upstream is caught rather than trusted.
@@ -10,7 +16,7 @@ node_modules/
 dist/
 out/
 
-# Generated test audio — rebuildable, and large.
+# Generated test audio: rebuildable, and large.
 fixtures/*.wav
 
 # Real meetings used for the counterfactual gate. These are private by
@@ -25,5 +31,3 @@ results/counterfactual-*/
 .DS_Store
 Thumbs.db
 *.local
-
-# Design preview writes nothing, but its port file would be noise.

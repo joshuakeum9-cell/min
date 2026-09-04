@@ -4,7 +4,8 @@
  * Electron, where window.api exists.
  *
  * The renderer expects window.api (an Electron preload bridge). Here that is
- * absent, so a small stub is injected: enough for the layout and every view to
+ * absent, so a small stub is served at /__api-stub.js: enough for the layout
+ * and every view to
  * render with plausible content, and nothing that touches disk.
  */
 
@@ -14,10 +15,53 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const APP = path.join(ROOT, 'app');
+const DOCS = path.join(ROOT, 'docs');
 const PORT = 4173;
+const HOST = '127.0.0.1'; // loopback only: this serves files off the developer's disk.
 
-const STUB = `
-<script>
+// Windows compares paths case-insensitively, so the containment test must too.
+const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+
+/**
+ * The path part of a request URL, percent-decoded. Null when the escape
+ * sequences are malformed or the path carries a NUL byte, both of which only
+ * ever show up in an attempt to confuse the path handling below.
+ */
+function pathnameOf(url) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(url.split(/[?#]/)[0]);
+  } catch {
+    return null;
+  }
+  return decoded.includes('\0') ? null : decoded;
+}
+
+/**
+ * Resolve `relative` under `base`, or null if it escapes. req.url is whatever
+ * the client sent, so a request for docs/../../../.ssh/id_rsa must resolve to
+ * nothing rather than to a file. Compares against base plus a trailing
+ * separator so a sibling like docs-private cannot pass as a child of docs.
+ */
+function resolveInside(base, relative) {
+  const full = path.resolve(base, relative);
+  const guard = base.endsWith(path.sep) ? base : base + path.sep;
+  if (fold(full) !== fold(base) && !fold(full).startsWith(fold(guard))) return null;
+  return full;
+}
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+};
+
+const STUB_JS = `
   const iso = (d) => new Date(d).toISOString();
   const FAKE = [
     { id:'2026-09-03-1400-vendor-sync', dir:'/m/1', title:'Vendor sync', startedAt: iso('2026-09-03T14:00'),
@@ -52,41 +96,63 @@ const STUB = `
     openFolder: async () => {},
     modelsReady: async () => true,
   };
-</script>
 `;
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.url.startsWith('/app/index.html') || req.url === '/' || req.url.startsWith('/?')) {
-      let html = await fs.readFile(path.join(ROOT, 'app', 'index.html'), 'utf8');
-      html = html.replace('<script type="module">', STUB + '<script type="module">');
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    const url = pathnameOf(req.url);
+    if (url === null) return res.writeHead(400).end('bad request');
+
+    if (url === '/app/index.html' || url === '/') {
+      let html = await fs.readFile(path.join(APP, 'index.html'), 'utf8');
+      // A classic script runs at parse time, so the stub is in place before
+      // renderer.js, which is deferred by virtue of being a module.
+      html = html.replace('<script type="module"', '<script src="/__api-stub.js"></script><script type="module"');
+      res.writeHead(200, { 'content-type': TYPES['.html'] });
       return res.end(html);
     }
-    // The renderer imports ./md.js as a module; serve anything under app/.
-    if (/^\/app\/[\w.-]+\.js$/.test(req.url)) {
-      const js = await fs.readFile(path.join(ROOT, req.url.replace(/^\//, '')), 'utf8');
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
-      return res.end(js);
+    if (url === '/__api-stub.js') {
+      res.writeHead(200, { 'content-type': TYPES['.js'] });
+      return res.end(STUB_JS);
     }
-    if (/^\/[\w.-]+\.js$/.test(req.url)) {
-      const js = await fs.readFile(path.join(ROOT, 'app', req.url.replace(/^\//, '')), 'utf8');
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
-      return res.end(js);
+    // The renderer imports ./md.js as a module; serve anything under app/, by
+    // either the /app/ path or the bare filename the module specifier produces.
+    const js = /^\/(?:app\/)?([\w.-]+\.js)$/.exec(url);
+    if (js) {
+      const file = resolveInside(APP, js[1]);
+      if (!file) return res.writeHead(403).end('forbidden');
+      res.writeHead(200, { 'content-type': TYPES['.js'] });
+      return res.end(await fs.readFile(file, 'utf8'));
+    }
+    // Vendored fonts, so the preview shows the real typefaces rather than a
+    // fallback. The app loads these from disk; here they need a route.
+    if (url.startsWith('/app/')) {
+      const file = resolveInside(APP, url.slice('/app/'.length));
+      if (!file) return res.writeHead(403).end('forbidden');
+      const body = await fs.readFile(file).catch(() => null);
+      if (!body) return res.writeHead(404).end('not found');
+      res.writeHead(200, { 'content-type': TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream' });
+      return res.end(body);
     }
     // The landing page, served raw (no window.api stub needed).
-    if (req.url.startsWith('/site')) {
-      const rel = req.url === '/site' || req.url === '/site/' ? 'site/index.html' : req.url.slice(1);
-      const file = path.join(ROOT, rel);
-      const html = await fs.readFile(file);
-      const type = file.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
-      res.writeHead(200, { 'content-type': type });
-      return res.end(html);
+    if (url === '/docs' || url.startsWith('/docs/')) {
+      const rel = url.slice('/docs'.length).replace(/^\/+/, '') || 'index.html';
+      const file = resolveInside(DOCS, rel);
+      if (!file) return res.writeHead(403).end('forbidden');
+      const body = await fs.readFile(file);
+      res.writeHead(200, { 'content-type': TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream' });
+      return res.end(body);
     }
     res.writeHead(404).end('not found');
   } catch (err) {
-    res.writeHead(500).end(String(err.message));
+    // A miss inside a served folder is a 404; anything else is a real fault,
+    // reported without the message so paths off disk stay off the wire.
+    if (err.code === 'ENOENT' || err.code === 'EISDIR' || err.code === 'EPERM') {
+      return res.writeHead(404).end('not found');
+    }
+    console.error(err);
+    res.writeHead(500).end('server error');
   }
 });
 
-server.listen(PORT, () => console.log(`ui preview on http://localhost:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`ui preview on http://${HOST}:${PORT}`));

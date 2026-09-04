@@ -42,7 +42,7 @@ function parseArgs(argv) {
  * Build a long test clip by tiling a short one.
  *
  * A 7-second clip cannot tell you whether throughput holds for an hour, and it
- * says nothing about peak memory at scale — which is the question that decides
+ * says nothing about peak memory at scale, which is the question that decides
  * whether an 8 GB machine can hold the ASR and language models at once.
  * This is a THROUGHPUT and MEMORY probe only; repeated speech says nothing
  * about accuracy.

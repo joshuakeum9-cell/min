@@ -1,12 +1,12 @@
 /**
- * Taonim · job 3 — the write-up, without an API key.
+ * Taonim · job 3, the write-up, without an API key.
  *
  * Assembles the transcript and the notes you typed into a single prompt and puts
  * it on the clipboard. You paste it into whatever assistant you already pay for.
  *
  * This exists because consumer subscriptions (ChatGPT Plus, Claude Pro) do not
  * include API access, and the only way to fake it is driving the web UI with your
- * session cookie — which breaks constantly and violates both providers' terms.
+ * session cookie, which breaks constantly and violates both providers' terms.
  * A clipboard hand-off costs one paste per meeting and is entirely above board.
  *
  * The prompt itself is the product. It is written to make the model flesh out the

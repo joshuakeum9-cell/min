@@ -3,27 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Taonim — meeting notes that never leave your machine</title>
-<meta name="description" content="Records both sides of a call with no bot joining, transcribes on your own computer, and turns the notes you typed into a clean write-up. No account, no API key, no subscription.">
+<title>Taonim: meeting notes that never leave your machine</title>
+<meta name="description" content="Records both sides of a call with no bot joining, transcribes on your own computer, and turns the notes you typed into a clean write-up. No account, no API key, no subscription to this.">
 <link rel="icon" href="icon.png">
+<link rel="canonical" href="https://joshuakeum9-cell.github.io/taonim/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://joshuakeum9-cell.github.io/taonim/">
+<meta property="og:title" content="Taonim: meeting notes that never leave your machine">
+<meta property="og:description" content="Records both sides of a call with no bot joining, transcribes on your own computer, and turns the notes you typed into a clean write-up. No account, no API key, no subscription to this.">
+<meta property="og:image" content="https://joshuakeum9-cell.github.io/taonim/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   /*
-   * Taonim design system at marketing scale.
+   * The Taonim design system, at marketing scale.
    *
-   * Dark canvas, oversized display type with aggressive negative tracking, IBM
+   * Light canvas, oversized display type with aggressive negative tracking, IBM
    * Plex Mono held back for technical eyebrows, and exactly one coral CTA per
-   * viewport. The single light band is the system's stated dual-theme rhythm:
-   * colour theme is section-scoped, not page-scoped.
+   * viewport. The single dark band is the system's dual-theme rhythm: colour
+   * theme is section-scoped, not page-scoped, so one section reads as a break.
    */
   :root {
     --canvas:#0b0b0b; --canvas-soft:#212121; --canvas-light:#ffffff; --canvas-paper:#ededed;
-    --graphite:#353535; --hairline-soft:#353535; --hairline:#ededed;
-    --slate:#3c4758; --slate-soft:#505b6c;
+    --hairline-soft:#353535; --hairline:#ededed;
     --white:#ffffff; --ash:#b9b9b9; --mute:#797979; --ink:#0b0b0b; --ink-soft:#212121;
-    --brand:#f36458; --success:#37cd84; --link:#55beff;
+    --brand:#f36458; --link:#55beff;
     --sans:'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
   }
@@ -130,7 +135,7 @@
   }
   .card p { margin:0; font-size:15px; color:var(--ink-soft); }
 
-  /* ----------------------------------------------------- light band (specs) */
+  /* --------------------------------------------- dark band + specs table */
   .band-dark { background:var(--canvas); color:var(--ash); border-top:none; }
   .band-dark h2, .band-dark h3 { color:var(--white); }
   .band-dark p.body { color:var(--ash); }
@@ -164,7 +169,6 @@
     font:0.88em var(--mono); background:var(--canvas-paper);
     padding:.15em .4em; border-radius:3px; color:var(--ink-soft);
   }
-  .band-light code { background:var(--canvas-paper); color:var(--ink-soft); }
 
   /* ---------------------------------------------------------------- footer */
   footer { border-top:1px solid var(--hairline); padding:56px 0 64px; }
@@ -196,13 +200,13 @@
     <p class="lede">
       Taonim records both sides of a call without a bot joining, transcribes it on your own
       computer, and turns the notes you typed into a clean write-up. No account. No API key.
-      No subscription. Nothing uploaded.
+      No subscription to this. Recording and transcription never touch the network.
     </p>
     <div class="cta-row">
       <a class="btn light" href="#download">Download for Windows</a>
       <a class="btn ghost" href="#how">See how it works</a>
     </div>
-    <p class="cta-note">112 MB installer · free and open source · MIT</p>
+    <p class="cta-note">~118 MB installer · unsigned, so Windows will warn you · free and open source · MIT</p>
   </div>
 </header>
 
@@ -215,10 +219,15 @@
       because it was written by something that was not in the room and does not know what you
       cared about. Taonim starts from your notes instead.
     </p>
+    <p class="body">
+      That claim has a test of its own, a blind reader trying to tell a write-up built from
+      your real notes apart from one built from a different meeting's notes, and it has not
+      been run yet.
+    </p>
 
     <div class="steps">
       <div class="step">
-        <p class="n">01 — Record</p>
+        <p class="n">01 · Record</p>
         <h3>Both sides, no bot</h3>
         <p>
           Your microphone and the call audio are captured as two separate tracks. Nobody sees a
@@ -226,7 +235,7 @@
         </p>
       </div>
       <div class="step">
-        <p class="n">02 — Type</p>
+        <p class="n">02 · Type</p>
         <h3>Fragments are fine</h3>
         <p>
           Half sentences, a heading, a name with a question mark. Your headings become the
@@ -234,11 +243,11 @@
         </p>
       </div>
       <div class="step">
-        <p class="n">03 — Write up</p>
+        <p class="n">03 · Write up</p>
         <h3>One click</h3>
         <p>
           Transcription runs on your machine. Then the write-up goes to whichever assistant you
-          already pay for — or straight into Claude, with nothing to paste.
+          already pay for, or straight into Claude, with nothing to paste.
         </p>
       </div>
     </div>
@@ -255,15 +264,18 @@
         <h3>Two tracks, never mixed</h3>
         <p>
           Keeping the microphone and the call audio separate means "who said this" is just
-          "which file was it in". No speaker-identification model, no clustering, no guessing —
+          "which file was it in". No speaker-identification model, no clustering, no guessing,
           and the two can never drift apart.
         </p>
       </div>
       <div class="card">
         <h3>Speech recognition stays home</h3>
         <p>
-          Transcription runs on your CPU at roughly sixteen times real time. An hour of audio
-          takes about four minutes, costs nothing, and works with the network cable pulled.
+          Transcription runs on your CPU, costs nothing, and works with the network cable
+          pulled. It has been benchmarked on exactly one desktop, where it ran ten to thirteen
+          times real time, which works out at four and a half to six minutes for an hour of
+          audio. That box is faster than most laptops, so treat those figures as a ceiling.
+          The specs below name the machine and the margin.
         </p>
       </div>
       <div class="card">
@@ -276,7 +288,7 @@
       <div class="card">
         <h3>The recording is deleted</h3>
         <p>
-          Audio is removed once transcription succeeds — not merely kept locally. If a
+          Audio is removed once transcription succeeds, not merely kept locally. If a
           transcription fails, the audio is kept instead, because then it is the only way to
           try again.
         </p>
@@ -288,24 +300,34 @@
 <section id="specs">
   <div class="wrap">
     <p class="eyebrow caps">Specifications</p>
-    <h2>Measured, not estimated.</h2>
+    <h2>Measured, not estimated. On one machine.</h2>
     <p class="body">
       Every number below came from running the thing on a real machine. Several contradicted
       the research that preceded them.
+    </p>
+    <p class="body">
+      That machine is the developer's desktop: an AMD Ryzen 5 5600G, six physical cores, 15 GB
+      of RAM, with a GTX 1660 SUPER in the box. The project's own hardware check refuses to
+      call it a valid test bed. It writes <code>"validTestBed": false</code> into every result
+      file and estimates the box at roughly 1.5x faster than the median laptop. The README for
+      those benchmarks calls numbers from a machine like this “an upper bound and nothing
+      more”. The target machine, four cores and 8 GB with no discrete graphics, has not been
+      benchmarked. Read every speed figure below as a ceiling, not a promise. The raw JSON is
+      in <code>results/</code> in the repository.
     </p>
 
     <div class="scroller">
       <table>
         <thead>
-          <tr><th>What</th><th>Measured</th></tr>
+          <tr><th>What</th><th>Measured on that one desktop</th></tr>
         </thead>
         <tbody>
-          <tr><td>Transcription speed</td><td>~16x real time on CPU — an hour of audio in about four minutes</td></tr>
-          <tr><td>Storage, 1 000 hours</td><td>~95 MB of markdown. Audio is deleted after transcription</td></tr>
+          <tr><td>Transcription speed</td><td>10x to 13x real time end to end, at the 30-second chunk the app actually uses. Longer chunks are slower: about 5.6x at 360 seconds, near the 398-second ceiling the recogniser will accept. 10x to 13x projects to 4.5 to 6 minutes for an hour of audio on this box. A full hour has not been run end to end, and on a 4-core laptop the same arithmetic gives nearer 7 to 9 minutes</td></tr>
+          <tr><td>Storage, 1 000 hours</td><td>~95 MB of markdown. Worked out from transcript sizes rather than timed on a stopwatch, and it does not depend on your hardware. Audio is deleted after transcription</td></tr>
           <tr><td>Speaker attribution</td><td>Exact, from separate tracks. No diarization model involved</td></tr>
-          <tr><td>Installer</td><td>112 MB. Speech models download once on first run, about 640 MB</td></tr>
+          <tr><td>Installer</td><td>About 118 MB. Speech models download once on first run, about 640 MB</td></tr>
           <tr><td>Network use</td><td>None after first run, unless you choose to send a write-up out</td></tr>
-          <tr><td>Requirements</td><td>Windows 10 or 11, 64-bit. No graphics card needed</td></tr>
+          <tr><td>Requirements</td><td>Windows 10 or 11, 64-bit. Transcription uses the CPU backend, so no graphics card is needed, though every benchmark so far ran on a box that happened to have one</td></tr>
           <tr><td>Licence</td><td>MIT. Speech models are CC-BY-4.0 and MIT, fetched at runtime</td></tr>
         </tbody>
       </table>
@@ -321,7 +343,7 @@
     <div class="install">
       <div>
         <ol class="plain">
-          <li>Download <code>Taonim Setup 1.0.0.exe</code> and double-click it.</li>
+          <li>Download <code>Taonim-Setup.exe</code> and double-click it.</li>
           <li>
             Windows will show a blue <strong>“Windows protected your PC”</strong> screen. Click
             <strong>More info</strong>, then <strong>Run anyway</strong>. See the note opposite.
@@ -333,9 +355,14 @@
           </li>
         </ol>
         <div class="cta-row" style="margin-top:28px">
-          <a class="btn brand" id="dl" href="https://github.com/USER/taonim/releases/latest">Download for Windows</a>
-          <a class="btn ghost" href="https://github.com/USER/taonim">Read the source</a>
+          <a class="btn brand" href="https://github.com/joshuakeum9-cell/taonim/releases/latest/download/Taonim-Setup.exe">Download for Windows</a>
+          <a class="btn ghost" href="https://github.com/joshuakeum9-cell/taonim">Read the source</a>
         </div>
+        <p class="cta-note">
+          Downloads <code>Taonim-Setup.exe</code> directly, about 118 MB, unsigned. Every
+          version is listed on the
+          <a href="https://github.com/joshuakeum9-cell/taonim/releases">Releases page</a>.
+        </p>
       </div>
 
       <aside class="warn">
@@ -344,10 +371,15 @@
           The installer is unsigned. A code-signing certificate costs money every year, and this
           is a free personal project, so it does not have one.
         </p>
-        <p style="margin:0">
-          Unsigned means Windows cannot confirm who published it — not that anything is wrong
+        <p style="margin:0 0 12px">
+          Unsigned means Windows cannot confirm who published it, not that anything is wrong
           with it. If you would rather not take that on faith, the source is public and you can
           build the installer yourself with <code>npm run dist</code>.
+        </p>
+        <p style="margin:0">
+          Some antivirus engines flag unsigned Electron installers too, usually as a generic
+          heuristic rather than a named threat. If yours objects, that is what it is objecting
+          to. Building it yourself avoids both warnings.
         </p>
       </aside>
     </div>
@@ -361,9 +393,9 @@
       own after the first run, has no analytics, and has no account to create.
     </p>
     <div class="links">
-      <a href="https://github.com/USER/taonim">Source</a>
-      <a href="https://github.com/USER/taonim/releases/latest">Releases</a>
-      <a href="https://github.com/USER/taonim/blob/main/LICENSE">Licence</a>
+      <a href="https://github.com/joshuakeum9-cell/taonim">Source</a>
+      <a href="https://github.com/joshuakeum9-cell/taonim/releases/latest">Releases</a>
+      <a href="https://github.com/joshuakeum9-cell/taonim/blob/main/LICENSE">Licence</a>
     </div>
   </div>
 </footer>

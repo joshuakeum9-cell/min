@@ -8,15 +8,15 @@
  * rather than "summarises the transcript". If that claim is true, swapping in a
  * DIFFERENT meeting's notes must visibly change the output. If a blind reader
  * cannot tell which note was built from the correct input, then the model is
- * ignoring the user's notes and writing a summary — and the entire premise of
+ * ignoring the user's notes and writing a summary, and the entire premise of
  * the product is a costume.
  *
  * Protocol:
- *   1. generate  — for each meeting, produce two notes from the SAME transcript:
+ *   1. generate , for each meeting, produce two notes from the SAME transcript:
  *                  one with the user's real notes, one with another meeting's
  *                  notes. Shuffle which is A and which is B. Write the key
  *                  separately so the reader cannot peek.
- *   2. score     — a blind reader picks, for each pair, which note used the real
+ *   2. score    , a blind reader picks, for each pair, which note used the real
  *                  notes. 7 of 10 correct is the pass mark.
  *
  * A deterministic anchor-retention metric runs alongside as a cheap early
@@ -76,7 +76,7 @@ async function generateNote(session, transcript, notes, maxTokens = 700) {
 
 /**
  * Anchor retention: what fraction of the distinctive words in the user's notes
- * survive into the output. Cheap, deterministic, and a useful early smell test —
+ * survive into the output. Cheap, deterministic, and a useful early smell test ,
  * but a high score does not prove the note reads like the user wrote it.
  */
 const STOP = new Set(
@@ -104,7 +104,7 @@ function anchorRetention(notes, output) {
   return +(hit / want.size).toFixed(3);
 }
 
-/** Deterministic shuffle — the run is reproducible from its own key file. */
+/** Deterministic shuffle, the run is reproducible from its own key file. */
 function seededPick(seed) {
   let x = seed;
   return () => {

@@ -1,9 +1,9 @@
 /**
- * Taonim · the library — listing and full-text search across meetings.
+ * Taonim · the library, listing and full-text search across meetings.
  *
  * The markdown files on disk are the only source of truth. This index is a cache
  * and nothing else: it lives outside the meetings folder, it is rebuilt from the
- * files in about a second, and deleting it loses nothing. That is deliberate —
+ * files in about a second, and deleting it loses nothing. That is deliberate ,
  * it means the index needs no backup story, no migration story, and no crash
  * recovery, and it can never disagree with the files for long.
  *
@@ -35,7 +35,7 @@ export async function readMeeting(dir) {
   ]);
   // A folder whose meeting.json is missing or corrupt still holds the notes and
   // transcript, which are the stated source of truth. Returning null here made
-  // the whole meeting vanish from the list AND from search — hiding the very
+  // the whole meeting vanish from the list AND from search, hiding the very
   // files the design promises will outlive the app. Degrade instead.
   let meta = null;
   try {

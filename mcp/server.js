@@ -15,6 +15,13 @@
  * the user's own subscription, over stdin/stdout. Nothing is uploaded, no key
  * exists, and nothing is exposed to the network.
  *
+ * It touches two places on disk: the Meetings folder, which it reads and writes,
+ * and Taonim's own application data folder, where it keeps the search index. The
+ * one other write is deleting the index an earlier build left in the OS temp
+ * directory. The manifest shown at install time says exactly this, and it is the
+ * only thing most people read before granting an extension access to their
+ * files, so the two have to stay true together.
+ *
  * Connect with:
  *   claude mcp add Taonim -- node "<repo>/mcp/server.js"
  * or point any MCP-capable client at this file over stdio.
@@ -28,16 +35,109 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { listMeetings, readMeeting, search, reindex, MEETINGS_DIR } from '../app/library.js';
 
-// The index is a disposable cache and must not live among the user's markdown.
-const INDEX_PATH = path.join(os.tmpdir(), 'taonim-mcp-index.db');
+/**
+ * Where Electron puts userData for this app, worked out without Electron: this
+ * process runs under the host's own Node runtime, so app.getPath does not exist
+ * here. Keeping the same folder means everything Taonim leaves on disk outside
+ * the Meetings folder is in one place, under the app's name, where a user can
+ * find it and delete it.
+ */
+function appDataDir() {
+  const home = os.homedir();
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Taonim');
+  }
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'Taonim');
+  }
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Taonim');
+}
+
+// The index holds the plaintext of every note, transcript and write-up, so it
+// belongs with the app's own data: not among the user's markdown, where it would
+// end up in their Dropbox, and not in os.tmpdir(), which on a shared machine is
+// readable by other accounts and is swept by cleaners that know nothing about
+// it. Separate file from the app's own index.db so the two processes never
+// rebuild the same database at the same time.
+const INDEX_PATH = path.join(appDataDir(), 'mcp-index.db');
+
+// Earlier builds wrote the index into os.tmpdir(). Sweeping that file up is part
+// of moving it: leaving the old plaintext copy of every meeting sitting in temp
+// is the exact thing this change exists to stop. Nothing else is deleted, and a
+// failure here is not worth a startup error.
+fsp.rm(path.join(os.tmpdir(), 'taonim-mcp-index.db'), { force: true }).catch(() => {});
 
 const server = new McpServer({
   name: 'Taonim',
   version: '1.0.0',
 });
 
-/** Resolve a meeting by folder name, or by a fuzzy match on the title. */
+/* -------------------------------------------------------------- containment */
+
+const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
+
+/**
+ * True when `target` is the meetings root or sits under it.
+ *
+ * The trailing separator is the whole point of the test: a bare prefix check
+ * also accepts "~/Meetings-old" and "~/Meetings.bak". Windows compares
+ * case-folded because NTFS opens "meetings\x" and "Meetings\X" as one file.
+ *
+ * This is a name test only, it does not follow links. Anything about to be
+ * written goes through writableInMeetings below, which does.
+ */
+function insideMeetings(target, root = MEETINGS_DIR) {
+  const r = fold(path.resolve(root));
+  const t = fold(path.resolve(target));
+  return t === r || t.startsWith(r.endsWith(path.sep) ? r : r + path.sep);
+}
+
+/**
+ * Containment for a path about to be written, with links resolved first: a
+ * note.md that is a symlink to ~/.ssh/authorized_keys sits inside the meetings
+ * folder by name and writes outside it in fact. A file that does not exist yet
+ * is checked through its parent directory, which does. Resolve the root too, in
+ * case the user's Meetings folder is itself a link onto another drive.
+ *
+ * This is deliberately stricter than confine() in app/main.js, which stops at
+ * path.resolve and so lets a planted symlink or junction through. The asymmetry
+ * is about who is calling. There the caller is the app's own renderer running
+ * code we shipped, and planting a link inside the folder already needs write
+ * access to the user's disk. Here the caller is whatever MCP client the user
+ * connected, driven by a model reading meeting text other people wrote, which
+ * makes save_writeup the least trusted write path in the product. It pays for
+ * the extra realpath calls. Do not unify the two gates by weakening this one.
+ */
+async function writableInMeetings(target) {
+  const real = await fsp.realpath(target).catch(async () => {
+    const dir = await fsp.realpath(path.dirname(target)).catch(() => path.dirname(target));
+    return path.join(dir, path.basename(target));
+  });
+  const root = await fsp.realpath(MEETINGS_DIR).catch(() => MEETINGS_DIR);
+  if (!insideMeetings(real, root)) {
+    throw new Error(
+      `Refusing to write ${path.basename(target)}: it resolves outside ${MEETINGS_DIR}.`
+    );
+  }
+  return real;
+}
+
+/** Resolve a meeting the caller named, and refuse anything outside MEETINGS_DIR. */
 async function findMeeting(idOrTitle) {
+  const m = await matchMeeting(idOrTitle);
+  // Nothing reachable today fails this: every id is a directory name read out of
+  // MEETINGS_DIR, so a caller passing "../../etc" simply matches nothing. It is
+  // the choke point every path-taking tool goes through, so it stays, and a
+  // later change that does join caller input onto a path cannot silently turn
+  // these five tools into a read and write primitive for the whole disk.
+  if (!insideMeetings(m.dir)) {
+    throw new Error(`Refusing "${idOrTitle}": it resolves outside ${MEETINGS_DIR}.`);
+  }
+  return m;
+}
+
+/** Match by exact folder name first, then by a fuzzy match on the title. */
+async function matchMeeting(idOrTitle) {
   const all = await listMeetings();
   if (!all.length) throw new Error(`No meetings found in ${MEETINGS_DIR}.`);
 
@@ -129,13 +229,18 @@ server.registerTool(
     title: 'Search meetings',
     description:
       'Full-text search across every meeting: the notes, the transcripts and the write-ups. ' +
-      'Use this to answer questions like "what did we decide about pricing" across many meetings.',
+      'Use this to answer questions like "what did we decide about pricing" across many meetings. ' +
+      "Builds a local index of that text in Taonim's own app data folder, and refreshes it on " +
+      'each search.',
     inputSchema: {
       query: z.string().describe('Words to search for. A trailing * does prefix matching.'),
       limit: z.number().int().min(1).max(50).default(10),
     },
   },
   async ({ query, limit }) => {
+    // First search after a fresh install: the app may never have run, so its
+    // data folder does not exist yet and opening the database would fail.
+    await fsp.mkdir(path.dirname(INDEX_PATH), { recursive: true });
     await reindex(INDEX_PATH);
     const hits = search(INDEX_PATH, query, limit);
     if (!hits.length) return text(`Nothing matches "${query}".`);
@@ -167,13 +272,14 @@ server.registerTool(
     const clean = content.trim();
     if (!clean) throw new Error('Refusing to save an empty write-up.');
 
-    await fsp.writeFile(path.join(m.dir, 'note.md'), clean + '\n');
+    await fsp.writeFile(await writableInMeetings(path.join(m.dir, 'note.md')), clean + '\n');
 
     // Record it, but never at the cost of the existing metadata: if meeting.json
-    // cannot be read (a lock, a sync client), leave it alone rather than
-    // replacing a good record with a stub.
-    const metaPath = path.join(m.dir, 'meeting.json');
+    // cannot be read (a lock, a sync client, or a link pointing out of the
+    // meetings folder), leave it alone rather than replacing a good record with
+    // a stub.
     try {
+      const metaPath = await writableInMeetings(path.join(m.dir, 'meeting.json'));
       const meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
       meta.note = { at: new Date().toISOString(), chars: clean.length, source: 'mcp' };
       await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');

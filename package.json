@@ -68,7 +68,8 @@
         }
       ],
       "icon": "build/icon.ico",
-      "signExecutable": false
+      "signExecutable": false,
+      "artifactName": "Taonim-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
