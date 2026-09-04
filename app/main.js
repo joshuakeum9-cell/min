@@ -439,6 +439,15 @@ ipcMain.handle('set-always-on-top', (_evt, on) => {
 // The inFlight coalescing above only holds within one process, so a second copy
 // of MIN defeats it outright and both runs race the same meeting's files. One
 // instance only: a second launch gives its window back to the copy already open.
+// A worker holds a 650 MB model and has nothing to report to once the window
+// is gone, so quitting should not leave one running.
+app.on('before-quit', async () => {
+  try {
+    const { killWorkers } = await import('./transcribe.js');
+    killWorkers();
+  } catch { /* nothing spawned yet, or the module never loaded */ }
+});
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

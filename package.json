@@ -1,6 +1,6 @@
 {
   "name": "min",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Meeting notes that never leave your machine.",
   "type": "module",
@@ -51,6 +51,7 @@
       "m0/lib/**/*",
       "package.json",
       "!**/*.map",
+      "!node_modules/@modelcontextprotocol/**",
       "!tools/**",
       "!build/**"
     ],

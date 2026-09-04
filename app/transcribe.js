@@ -54,6 +54,17 @@ const MAX_WAV_BYTES = 2 * 1024 * 1024 * 1024;
 
 const WORKER_STALL_MS = 10 * 60 * 1000;
 
+const envWithout = (env, drop) =>
+  Object.fromEntries(Object.entries(env).filter(([k]) => !drop.includes(k)));
+
+// Workers outlive the window otherwise: quitting mid-transcription left an
+// orphaned process holding a 650 MB model with nothing to report back to.
+const liveWorkers = new Set();
+export function killWorkers() {
+  for (const c of liveWorkers) c.kill();
+  liveWorkers.clear();
+}
+
 function runWorker({ wav, speaker, modelDir, vadModel, threads, onProgress }) {
   return new Promise((resolve) => {
     // In a packaged app process.execPath is the Electron binary, not node, so a
@@ -65,9 +76,13 @@ function runWorker({ wav, speaker, modelDir, vadModel, threads, onProgress }) {
       [WORKER, wav, speaker, modelDir, vadModel, String(threads)],
       {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        // ELECTRON_RUN_AS_NODE makes this binary honour NODE_OPTIONS, so an
+        // inherited --require would run attacker code inside the worker.
+        // The worker needs none of these.
+        env: { ...envWithout(process.env, ['NODE_OPTIONS', 'NODE_REPL_EXTERNAL_MODULE']), ELECTRON_RUN_AS_NODE: '1' },
       }
     );
+    liveWorkers.add(child);
 
     const segments = [];
     let meta = null;
@@ -143,7 +158,7 @@ function runWorker({ wav, speaker, modelDir, vadModel, threads, onProgress }) {
 
     child.on('exit', (code) => { exitCode = code; });
     // 'close' fires after stdio drains, so a final `done` line is not lost.
-    child.on('close', () => { exitCode = exitCode ?? -1; finish(); });
+    child.on('close', () => { liveWorkers.delete(child); exitCode = exitCode ?? -1; finish(); });
   });
 }
 
