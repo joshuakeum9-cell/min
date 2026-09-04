@@ -1,5 +1,5 @@
 /**
- * granola-local · M2 — transcription.
+ * Taonim · M2 — transcription.
  *
  * Takes a meeting folder produced by the recorder and turns the two audio tracks
  * into one interleaved transcript with speaker attribution.

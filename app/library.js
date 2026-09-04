@@ -1,5 +1,5 @@
 /**
- * granola-local · the library — listing and full-text search across meetings.
+ * Taonim · the library — listing and full-text search across meetings.
  *
  * The markdown files on disk are the only source of truth. This index is a cache
  * and nothing else: it lives outside the meetings folder, it is rebuilt from the

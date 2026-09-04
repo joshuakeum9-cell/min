@@ -1,4 +1,4 @@
-# granola-local
+# Taonim
 
 Meeting notes that never leave your machine.
 
@@ -115,7 +115,7 @@ node m0/eval-counterfactual.js --make-fixtures    # then use 10 real meetings
 
 ## Installing
 
-Grab `granola-local Setup.exe` from Releases and run it.
+Grab `Taonim Setup.exe` from Releases and run it.
 
 **Windows will warn you.** The installer is unsigned, because a code-signing
 certificate costs money and this is a personal project given away for free. You
@@ -151,7 +151,7 @@ The app never sees a login. It has no password, no token, nothing to revoke, and
 to leak. Your browser already holds the session; the app just points at it.
 
 **Or install the Claude Desktop extension (no pasting at all).** Download
-`granola-local.mcpb` from Releases and double-click it, or drag it onto the Claude Desktop
+`taonim.mcpb` from Releases and double-click it, or drag it onto the Claude Desktop
 window. Then just ask:
 
 > "Write up my 3pm call with the vendor."

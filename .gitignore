@@ -25,3 +25,5 @@ results/counterfactual-*/
 .DS_Store
 Thumbs.db
 *.local
+
+# Design preview writes nothing, but its port file would be noise.

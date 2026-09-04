@@ -1,5 +1,5 @@
 {
-  "name": "granola-local",
+  "name": "taonim",
   "version": "1.0.0",
   "private": true,
   "description": "Meeting notes that never leave your machine.",
@@ -35,12 +35,12 @@
     "node-llama-cpp": "3.20.0"
   },
   "main": "app/main.js",
-  "productName": "granola-local",
+  "productName": "Taonim",
   "author": "Joshua Keum",
   "license": "MIT",
   "build": {
-    "appId": "dev.joshuakeum.granolalocal",
-    "productName": "granola-local",
+    "appId": "dev.joshuakeum.taonim",
+    "productName": "Taonim",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -49,7 +49,8 @@
       "app/**/*",
       "m0/lib/**/*",
       "package.json",
-      "!**/*.map"
+      "!**/*.map",
+      "!tools/**"
     ],
     "asarUnpack": [
       "app/asr-worker.js",

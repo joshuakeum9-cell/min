@@ -1,5 +1,5 @@
 /**
- * granola-local · M1 — the recorder.
+ * Taonim · M1 — the recorder.
  *
  * Main process. Owns the window, the loopback grant, and everything that touches
  * disk. The renderer captures audio and hands over finished PCM; it never writes
@@ -24,8 +24,8 @@ export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
 
 // Point the model loader at a writable per-user directory before anything
 // imports it. Inside a packaged app the source tree is a read-only asar.
-if (!process.env.GRANOLA_MODELS_DIR) {
-  process.env.GRANOLA_MODELS_DIR = path.join(app.getPath('userData'), 'models');
+if (!process.env.TAONIM_MODELS_DIR) {
+  process.env.TAONIM_MODELS_DIR = path.join(app.getPath('userData'), 'models');
 }
 
 /* ------------------------------------------------------------------- window */
@@ -38,7 +38,7 @@ function createWindow() {
     height: 620,
     minWidth: 360,
     minHeight: 420,
-    title: 'granola-local',
+    title: 'Taonim',
     backgroundColor: '#101312',
     alwaysOnTop: true,
     webPreferences: {

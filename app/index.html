@@ -2,199 +2,335 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>granola-local</title>
+<title>Taonim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
+  /*
+   * Taonim design system, applied at application scale.
+   *
+   * The source system is a dark-first editorial surface: near-black canvas,
+   * white headlines, ash body, and ONE coral accent used so sparingly that a
+   * viewer can predict where it appears. Here that single accent is spent on the
+   * Record button — the highest-priority action in the product — and the brand
+   * dot beside the wordmark. Nothing else is coral.
+   *
+   * IBM Plex Mono is reserved strictly for technical eyebrows and small-caps
+   * labels (speaker tags, timestamps, meter labels). Every other role is the
+   * grotesque. Marketing pills coexist with sharply-cut 3-6px application radii,
+   * which is the system's stated dual identity — so the primary action is a pill
+   * and every in-product control is cut square.
+   */
   :root {
-    --bg:#101312; --panel:#181C1A; --sunk:#0C0F0E;
-    --rule:#2B312E; --rule-soft:#232826;
-    --ink:#E8EBE7; --dim:#98A29D; --faint:#6E7873;
-    --mic:#4FBFAE; --sys:#D9A040; --rec:#E0645A; --ok:#7BC96F;
-    --mono: ui-monospace,'Cascadia Mono',Consolas,monospace;
+    --canvas:#0b0b0b; --canvas-soft:#212121; --graphite:#353535;
+    --hairline-soft:#353535; --slate:#3c4758; --slate-soft:#505b6c;
+    --white:#ffffff; --ash:#b9b9b9; --mute:#797979;
+    --brand:#f36458; --brand-deep:#dd0000;
+    --success:#37cd84; --error:#dd0000; --link:#55beff;
+
+    --sans:'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+    --r-xs:3px; --r-sm:4px; --r-md:5px; --r-lg:6px; --r-full:9999px;
   }
   * { box-sizing:border-box; }
-  html,body { height:100%; }
+  html, body { height:100%; }
   body {
-    margin:0; background:var(--bg); color:var(--ink);
-    font:14px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif;
+    margin:0; background:var(--canvas); color:var(--ash);
+    font:400 15px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
     display:flex; flex-direction:column; overflow:hidden;
   }
   .hide { display:none !important; }
+  ::selection { background:var(--brand); color:var(--canvas); }
 
-  /* ---- tabs ---- */
-  nav {
-    display:flex; gap:2px; padding:8px 10px 0; flex:none;
-    border-bottom:1px solid var(--rule); background:var(--sunk);
+  /* ---------------------------------------------------------------- header */
+  header.top {
+    display:flex; align-items:center; gap:16px; padding:0 16px; height:56px;
+    flex:none; background:var(--canvas); border-bottom:1px solid var(--hairline-soft);
   }
-  nav button {
-    background:transparent; border:none; border-bottom:2px solid transparent;
-    color:var(--dim); font:600 12.5px/1 inherit; padding:9px 13px; cursor:pointer;
-    border-radius:3px 3px 0 0;
+  .wordmark {
+    display:flex; align-items:center; gap:8px;
+    font:500 19px/1 var(--sans); letter-spacing:-0.019em; color:var(--white);
   }
-  nav button.on { color:var(--ink); border-bottom-color:var(--mic); }
-  nav button:focus-visible { outline:2px solid var(--mic); outline-offset:-2px; }
-  nav .grow { flex:1; }
-  nav .pin {
-    font:10px/1 var(--mono); color:var(--faint); display:flex;
-    align-items:center; gap:5px; cursor:pointer; padding-right:6px;
+  /* The brand dot — one of exactly two places coral is permitted. */
+  .wordmark::after {
+    content:''; width:8px; height:8px; border-radius:var(--r-full);
+    background:var(--brand); flex:none;
   }
+  .tabs { display:flex; gap:4px; }
+  .tabs button {
+    background:var(--canvas-soft); border:1px solid transparent; cursor:pointer;
+    height:32px; padding:0 12px; border-radius:var(--r-sm);
+    font:600 11px/1 var(--sans); letter-spacing:.06em; text-transform:uppercase;
+    color:var(--mute);
+  }
+  .tabs button:hover { color:var(--ash); border-color:var(--graphite); }
+  .tabs button.on { background:var(--white); color:var(--canvas); }
+  .tabs button:focus-visible { outline:2px solid var(--link); outline-offset:1px; }
+  .spacer { flex:1; }
+  .pin {
+    display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
+    font:400 10px/1.5 var(--mono); letter-spacing:.06em; text-transform:uppercase;
+    color:var(--mute);
+  }
+  .pin input { accent-color:var(--brand); margin:0; }
 
   .view { flex:1; min-height:0; display:flex; flex-direction:column; }
 
-  /* ---- buttons ---- */
-  button.act {
-    font:600 13px/1 inherit; padding:9px 15px; border-radius:3px; cursor:pointer;
-    border:1px solid var(--mic); background:var(--mic); color:#06231F;
+  /* --------------------------------------------------------------- buttons */
+  /* Pill = marketing-grade primary action. Square = in-product control. */
+  .btn {
+    font:500 13px/1 var(--sans); letter-spacing:-0.01em; cursor:pointer;
+    height:36px; padding:0 14px; border-radius:var(--r-md);
+    border:1px solid var(--graphite); background:var(--canvas-soft); color:var(--ash);
+    display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+    transition:background .12s, color .12s, border-color .12s;
   }
-  button.ghost { background:transparent; color:var(--ink); border-color:var(--rule); }
-  button.stop  { background:var(--rec); border-color:var(--rec); color:#2A0D0A; }
-  button.act:disabled { opacity:.35; cursor:not-allowed; }
-  button.act:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
-  button.tiny { font-size:11px; padding:6px 10px; }
+  .btn:hover { color:var(--white); border-color:var(--slate-soft); }
+  .btn:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
+  .btn:disabled { opacity:.34; cursor:not-allowed; }
+  .btn:disabled:hover { color:var(--ash); border-color:var(--graphite); }
 
-  /* ---- record view ---- */
-  header { padding:11px 14px 9px; border-bottom:1px solid var(--rule); flex:none; }
+  .btn.primary {
+    background:var(--white); color:var(--canvas); border-color:var(--white);
+    border-radius:var(--r-full); height:38px; padding:0 18px; font-weight:500;
+  }
+  .btn.primary:hover { background:#e8e8e8; border-color:#e8e8e8; color:var(--canvas); }
+
+  /* The one coral action in the product. */
+  .btn.brand {
+    background:var(--brand); color:var(--canvas); border-color:var(--brand);
+    border-radius:var(--r-full); height:38px; padding:0 18px; font-weight:600;
+  }
+  .btn.brand:hover { background:#f5766b; border-color:#f5766b; color:var(--canvas); }
+  .btn.sm { height:30px; padding:0 11px; font-size:12px; }
+
+  .dot { width:8px; height:8px; border-radius:var(--r-full); background:currentColor; flex:none; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+  .btn.rec-on .dot { animation:pulse 1.3s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .btn.rec-on .dot { animation:none } }
+
+  /* ------------------------------------------------------------- transport */
+  .transport { display:flex; align-items:center; gap:12px; padding:16px 16px 12px; flex:none; }
   #title {
-    width:100%; background:transparent; border:none; color:var(--ink);
-    font:600 15px/1.3 inherit; padding:2px 0; outline:none;
+    flex:1; min-width:0; background:transparent; border:none; color:var(--white);
+    font:500 24px/1.1 var(--sans); letter-spacing:-0.024em; padding:0; outline:none;
   }
-  #title::placeholder { color:var(--faint); }
-  .bar { display:flex; gap:9px; align-items:center; padding:10px 14px; flex:none; }
-  #clock { font:600 15px/1 var(--mono); font-variant-numeric:tabular-nums; color:var(--dim); }
-  #clock.live { color:var(--rec); }
+  #title::placeholder { color:var(--graphite); }
+  #clock {
+    font:400 13px/1 var(--mono); color:var(--mute); font-variant-numeric:tabular-nums;
+  }
+  #clock.live { color:var(--brand); }
 
-  .meters { padding:0 14px 10px; display:grid; gap:6px; flex:none; }
-  .track { display:grid; grid-template-columns:60px 1fr 40px; gap:9px; align-items:center; }
-  .track .name { font:600 9.5px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; }
-  .t-mic .name { color:var(--mic); } .t-sys .name { color:var(--sys); }
-  .lvl { height:7px; background:var(--rule-soft); border-radius:2px; overflow:hidden; }
-  .lvl i { display:block; height:100%; width:0; border-radius:2px; transition:width .08s linear; }
-  .t-mic .lvl i { background:var(--mic); } .t-sys .lvl i { background:var(--sys); }
-  .track .val {
-    font:10px/1 var(--mono); color:var(--faint); text-align:right;
-    font-variant-numeric:tabular-nums;
+  /* Meters are diagnostics. Mono labels, hairline tracks, nothing shouting. */
+  .meters { display:flex; gap:20px; padding:0 16px 14px; flex:none; }
+  .meter { display:flex; align-items:center; gap:9px; flex:1; }
+  .meter .tag {
+    font:400 10px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--mute); width:34px; flex:none;
+  }
+  .bar { flex:1; height:2px; background:var(--graphite); overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; transition:width .09s linear; }
+  .m-you .bar i { background:var(--white); }
+  .m-them .bar i { background:var(--slate-soft); }
+  .meter .secs {
+    font:400 10px/1 var(--mono); color:var(--mute); width:28px; text-align:right;
+    flex:none; font-variant-numeric:tabular-nums;
   }
 
-  textarea {
-    flex:1; min-height:0; width:100%; resize:none; outline:none;
-    background:var(--panel); color:var(--ink); border:none;
-    border-top:1px solid var(--rule); padding:14px; font:14px/1.62 inherit;
+  /* ----------------------------------------------------------------- notes */
+  .sheet { flex:1; min-height:0; padding:0 16px; display:flex; }
+  #notes {
+    flex:1; width:100%; resize:none; outline:none;
+    background:var(--canvas); color:var(--ash);
+    border:1px solid var(--hairline-soft); border-radius:var(--r-xs);
+    padding:16px; font:400 15px/1.68 var(--sans);
   }
-  textarea::placeholder { color:var(--faint); }
-  .after { display:flex; gap:8px; padding:10px 14px 0; flex:none; align-items:center; }
-  .after #write { flex:1; }
+  #notes:focus { border-color:var(--slate-soft); }
+  #notes::placeholder { color:var(--graphite); }
+
+  .actions { display:flex; gap:8px; align-items:center; padding:14px 16px; flex:none; }
+  .actions #write { flex:1; justify-content:center; }
   select.prov {
-    background:var(--panel); color:var(--ink); border:1px solid var(--rule);
-    border-radius:3px; padding:9px 8px; font:12.5px inherit; outline:none; cursor:pointer;
+    background:var(--canvas-soft); color:var(--ash); border:1px solid var(--graphite);
+    border-radius:var(--r-md); height:36px; padding:0 9px;
+    font:500 12.5px/1 var(--sans); outline:none; cursor:pointer;
   }
-  select.prov:focus { border-color:var(--mic); }
+  select.prov:hover { color:var(--white); border-color:var(--slate-soft); }
+  select.prov:focus { border-color:var(--link); }
 
-  /* ---- meetings view ---- */
-  .searchbar { padding:10px 14px; flex:none; display:flex; gap:8px; }
+  /* -------------------------------------------------------------- meetings */
+  .searchbar { padding:16px 16px 12px; flex:none; display:flex; gap:8px; }
   #q {
-    flex:1; background:var(--panel); border:1px solid var(--rule); border-radius:3px;
-    color:var(--ink); padding:8px 11px; font:13px inherit; outline:none;
+    flex:1; background:var(--canvas); color:var(--ash);
+    border:1px solid var(--hairline-soft); border-radius:var(--r-xs);
+    height:38px; padding:0 12px; font:400 14px var(--sans); outline:none;
   }
-  #q:focus { border-color:var(--mic); }
-  #q::placeholder { color:var(--faint); }
+  #q:focus { border-color:var(--slate-soft); }
+  #q::placeholder { color:var(--graphite); }
 
-  .split { flex:1; min-height:0; display:flex; }
+  .split { flex:1; min-height:0; display:flex; border-top:1px solid var(--hairline-soft); }
   .list {
-    width:190px; flex:none; overflow-y:auto; border-right:1px solid var(--rule);
-    background:var(--sunk);
+    width:208px; flex:none; overflow-y:auto; background:var(--canvas);
+    border-right:1px solid var(--hairline-soft);
   }
   .row {
-    padding:10px 12px; border-bottom:1px solid var(--rule-soft); cursor:pointer;
-    display:grid; gap:3px;
+    padding:12px 14px; cursor:pointer; display:grid; gap:5px;
+    border-bottom:1px solid var(--hairline-soft); border-left:2px solid transparent;
   }
-  .row:hover { background:var(--panel); }
-  .row.on { background:var(--panel); box-shadow:inset 2px 0 0 var(--mic); }
-  .row .t { font:600 12.5px/1.3 inherit; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .row .m { font:10px/1.3 var(--mono); color:var(--faint); display:flex; gap:6px; }
-  .dot { width:6px; height:6px; border-radius:50%; display:inline-block; }
-  .d-tx { background:var(--sys); } .d-wr { background:var(--ok); } .d-no { background:var(--rule); }
-  .snip { font:10.5px/1.4 inherit; color:var(--dim); }
-  .snip b { color:var(--mic); font-weight:600; }
+  .row:hover { background:var(--canvas-soft); }
+  .row.on { background:var(--canvas-soft); border-left-color:var(--brand); }
+  .row .t {
+    font:500 14px/1.3 var(--sans); letter-spacing:-0.014em; color:var(--white);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .row .m {
+    font:400 10px/1.4 var(--mono); color:var(--mute); display:flex;
+    align-items:center; gap:7px; letter-spacing:.02em;
+  }
+  .pip { width:6px; height:6px; border-radius:var(--r-full); flex:none; }
+  .p-wr { background:var(--success); }
+  .p-tx { background:var(--slate-soft); }
+  .p-no { background:transparent; border:1px solid var(--graphite); }
+  .snip { font:400 11.5px/1.5 var(--sans); color:var(--mute); }
+  .snip b { color:var(--white); font-weight:500; }
 
-  .detail { flex:1; min-width:0; display:flex; flex-direction:column; }
-  .dhead { padding:12px 14px 10px; border-bottom:1px solid var(--rule); flex:none; }
-  .dhead h2 { margin:0 0 3px; font-size:15px; font-weight:600; }
-  .dhead .sub { font:10.5px/1.4 var(--mono); color:var(--faint); }
-  .dacts { display:flex; gap:6px; flex-wrap:wrap; padding:9px 14px; flex:none; }
-  .dtabs { display:flex; gap:2px; padding:0 14px; border-bottom:1px solid var(--rule); flex:none; }
+  .detail { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--canvas); }
+  .dhead { padding:20px 22px 12px; flex:none; }
+  .dhead h2 {
+    margin:0 0 6px; font:500 26px/1.1 var(--sans); letter-spacing:-0.026em; color:var(--white);
+  }
+  .dhead .sub {
+    font:400 10.5px/1.5 var(--mono); color:var(--mute);
+    letter-spacing:.05em; text-transform:uppercase;
+  }
+  .dacts { display:flex; gap:8px; flex-wrap:wrap; padding:0 22px 16px; flex:none; }
+  .dtabs { display:flex; gap:0; padding:0 22px; border-bottom:1px solid var(--hairline-soft); flex:none; }
   .dtabs button {
     background:none; border:none; border-bottom:2px solid transparent; cursor:pointer;
-    color:var(--faint); font:600 11px/1 var(--mono); letter-spacing:.09em;
-    text-transform:uppercase; padding:9px 9px;
+    color:var(--mute); font:600 11px/1 var(--sans); letter-spacing:.07em;
+    text-transform:uppercase; padding:10px 2px; margin-right:20px;
   }
-  .dtabs button.on { color:var(--ink); border-bottom-color:var(--mic); }
-  .dbody { flex:1; min-height:0; overflow-y:auto; padding:14px; }
-  .dbody pre {
-    margin:0; white-space:pre-wrap; word-break:break-word;
-    font:12.5px/1.68 var(--mono); color:var(--ink);
-  }
-  .dbody .empty { color:var(--faint); font-size:12.5px; line-height:1.6; }
-  .dbody textarea {
-    border:1px solid var(--rule); border-radius:3px; min-height:230px;
-    font:12.5px/1.6 var(--mono);
-  }
+  .dtabs button:hover { color:var(--ash); }
+  .dtabs button.on { color:var(--white); border-bottom-color:var(--brand); }
+  .dbody { flex:1; min-height:0; overflow-y:auto; padding:22px; }
 
-  footer {
-    padding:9px 14px; flex:none; min-height:38px; display:flex; align-items:center;
-    border-top:1px solid var(--rule);
+  .dbody .doc { max-width:68ch; font:400 15px/1.62 var(--sans); color:var(--ash); }
+  .dbody .doc h2, .dbody .doc h3, .dbody .doc h4, .dbody .doc h5 {
+    font-family:var(--sans); font-weight:500; color:var(--white);
+    letter-spacing:-0.02em; margin:28px 0 9px; line-height:1.13;
   }
-  #status { font:11.5px/1.45 var(--mono); color:var(--dim); flex:1; }
-  #status.warn { color:var(--rec); } #status.good { color:var(--ok); }
+  .dbody .doc > :first-child { margin-top:0; }
+  .dbody .doc h2 { font-size:21px; }
+  .dbody .doc h3 { font-size:17px; }
+  .dbody .doc h4, .dbody .doc h5 { font-size:15px; }
+  .dbody .doc p { margin:0 0 14px; }
+  .dbody .doc ul, .dbody .doc ol { margin:0 0 14px; padding-left:20px; }
+  .dbody .doc li { margin-bottom:6px; }
+  .dbody .doc li::marker { color:var(--graphite); }
+  .dbody .doc strong { color:var(--white); font-weight:500; }
+  .dbody .doc a { color:var(--link); }
+  .dbody .doc code {
+    font:0.87em var(--mono); background:var(--canvas-soft);
+    padding:.12em .38em; border-radius:var(--r-xs); color:var(--ash);
+  }
+  .dbody .doc blockquote {
+    margin:0 0 14px; padding-left:14px; border-left:2px solid var(--graphite); color:var(--mute);
+  }
+  .dbody .doc hr { border:none; border-top:1px solid var(--hairline-soft); margin:24px 0; }
+
+  /* Transcript: a technical document. Mono eyebrows do the structural work. */
+  .dbody .doc.script { max-width:76ch; }
+  .dbody .doc.script .line {
+    margin:0 0 10px; display:grid; grid-template-columns:64px 46px 1fr; gap:12px;
+    font-size:14px; line-height:1.6;
+  }
+  .dbody .doc.script .ts {
+    font:400 10.5px/2 var(--mono); color:var(--graphite); font-variant-numeric:tabular-nums;
+  }
+  .dbody .doc.script .who {
+    font:400 10px/2.1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
+  }
+  .dbody .doc.script .who.you  { color:var(--white); }
+  .dbody .doc.script .who.them { color:var(--slate-soft); }
+
+  .dbody .empty { color:var(--mute); font-size:14px; line-height:1.65; max-width:54ch; }
+  .dbody .empty b { color:var(--white); font-weight:500; }
+  .dbody textarea {
+    width:100%; min-height:240px; margin-top:14px; resize:vertical;
+    background:var(--canvas); color:var(--ash);
+    border:1px solid var(--hairline-soft); border-radius:var(--r-xs);
+    padding:14px; font:400 14px/1.6 var(--sans); outline:none;
+  }
+  .dbody textarea:focus { border-color:var(--slate-soft); }
+
+  /* ---------------------------------------------------------------- footer */
+  footer {
+    padding:0 16px; flex:none; height:40px; display:flex; align-items:center;
+    border-top:1px solid var(--hairline-soft); background:var(--canvas);
+  }
+  #status {
+    font:400 10.5px/1.5 var(--mono); color:var(--mute); flex:1;
+    letter-spacing:.03em;
+  }
+  #status.warn { color:var(--error); }
+  #status.good { color:var(--success); }
 </style>
 </head>
 <body>
 
-<nav>
-  <button id="tabRec" class="on">Record</button>
-  <button id="tabLib">Meetings</button>
-  <span class="grow"></span>
+<header class="top">
+  <span class="wordmark">Taonim</span>
+  <nav class="tabs">
+    <button id="tabRec" class="on">Notes</button>
+    <button id="tabLib">Meetings</button>
+  </nav>
+  <span class="spacer"></span>
   <label class="pin" title="Keep this window above your call">
     <input type="checkbox" id="ontop" checked> on top
   </label>
-</nav>
+</header>
 
-<!-- ───────────────────────────── record ───────────────────────────── -->
+<!-- ────────────────────────────── notes ────────────────────────────── -->
 <section class="view" id="viewRec">
-  <header><input id="title" placeholder="Meeting title…" autocomplete="off"></header>
-
-  <div class="bar">
-    <button id="rec" class="act">Record</button>
-    <button id="stopBtn" class="act stop" disabled>Stop</button>
+  <div class="transport">
+    <input id="title" placeholder="Untitled meeting" autocomplete="off">
     <span id="clock">00:00</span>
+    <button id="rec" class="btn brand"><span class="dot"></span>Record</button>
+    <button id="stopBtn" class="btn" disabled>Stop</button>
   </div>
 
   <div class="meters">
-    <div class="track t-mic">
-      <span class="name">▲ You</span>
-      <span class="lvl"><i id="micLvl"></i></span>
-      <span class="val" id="micVal">—</span>
+    <div class="meter m-you">
+      <span class="tag">You</span>
+      <span class="bar"><i id="micLvl"></i></span>
+      <span class="secs" id="micVal"></span>
     </div>
-    <div class="track t-sys">
-      <span class="name">▼ Them</span>
-      <span class="lvl"><i id="sysLvl"></i></span>
-      <span class="val" id="sysVal">—</span>
+    <div class="meter m-them">
+      <span class="tag">Them</span>
+      <span class="bar"><i id="sysLvl"></i></span>
+      <span class="secs" id="sysVal"></span>
     </div>
   </div>
 
-  <textarea id="notes" spellcheck="true"
-    placeholder="Type as the meeting goes. Fragments are fine — half sentences, a heading, a name with a question mark.&#10;&#10;Use # headings: they become the sections of your write-up.&#10;&#10;These notes are the skeleton. They are never rewritten or overwritten."></textarea>
+  <div class="sheet">
+    <textarea id="notes" spellcheck="true"
+      placeholder="Type as the meeting goes. Fragments are fine — half sentences, a heading, a name with a question mark.&#10;&#10;Use # for headings. They become the sections of your write-up.&#10;&#10;These notes are the skeleton. Nothing rewrites them."></textarea>
+  </div>
 
-  <div class="after hide" id="after">
-    <button id="write" class="act">Write up with…</button>
+  <div class="actions hide" id="after">
+    <button id="write" class="btn primary">Write up with</button>
     <select id="provider" class="prov" title="Which assistant to open"></select>
-    <button id="openRec" class="act ghost tiny">Folder</button>
+    <button id="openRec" class="btn sm">Folder</button>
   </div>
 </section>
 
-<!-- ──────────────────────────── meetings ──────────────────────────── -->
+<!-- ───────────────────────────── meetings ──────────────────────────── -->
 <section class="view hide" id="viewLib">
   <div class="searchbar">
-    <input id="q" placeholder="Search everything you have said and heard…" autocomplete="off">
-    <button id="clearQ" class="act ghost tiny">Clear</button>
+    <input id="q" placeholder="Search everything you have said and heard" autocomplete="off">
+    <button id="clearQ" class="btn sm">Clear</button>
   </div>
   <div class="split">
     <div class="list" id="list"></div>
@@ -207,6 +343,8 @@
 <footer><span id="status">Ready.</span></footer>
 
 <script type="module">
+import { renderMarkdown, renderTranscript } from './md.js';
+
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
 const setStatus = (m, cls = '') => { statusEl.className = cls; statusEl.textContent = m; };
@@ -256,7 +394,7 @@ function resetTracks() {
   for (const k of ['mic', 'sys']) {
     Object.assign(T[k], { chunks: [], frames: 0, empty: 0, blocks: 0, peak: 0 });
     T[k].lvl.style.width = '0';
-    T[k].val.textContent = '—';
+    T[k].val.textContent = '';
   }
   deviceEvents = [];
 }
@@ -369,6 +507,7 @@ async function start() {
   recording = true;
   starting = false;
   $('stopBtn').disabled = false;
+  $('rec').classList.add('rec-on');
   $('clock').classList.add('live');
   setStatus('● Recording…');
 
@@ -397,6 +536,7 @@ function fail(msg) {
   teardownCapture();
   starting = false;
   $('rec').disabled = false;
+  $('rec').classList.remove('rec-on');
   setStatus(msg, 'warn');
 }
 
@@ -458,6 +598,7 @@ async function stopRec() {
     // Must run even when concat or saveMeeting throws, or Record stays dead.
     T.mic.chunks = []; T.sys.chunks = [];
     $('rec').disabled = false;
+    $('rec').classList.remove('rec-on');
     $('clock').textContent = '00:00';
   }
 }
@@ -590,7 +731,7 @@ function renderList() {
     return `<div class="row ${current === m.dir ? 'on' : ''}" data-i="${i}">
       <span class="t">${esc(m.title)}</span>
       <span class="m">
-        <span class="dot ${m.written ? 'd-wr' : m.transcribed ? 'd-tx' : 'd-no'}"></span>
+        <span class="pip ${m.written ? 'p-wr' : m.transcribed ? 'p-tx' : 'p-no'}"></span>
         ${fmtDate(m.startedAt)} · ${fmtDur(m.durationSeconds)}
       </span>
       ${hit ? `<span class="snip">${hit}</span>` : ''}
@@ -613,20 +754,20 @@ function drawDetail(m) {
   const body =
     dtab === 'notes'
       ? m.notes?.trim()
-        ? `<pre>${esc(m.notes)}</pre>`
+        ? `<div class="doc">${renderMarkdown(m.notes)}</div>`
         : '<p class="empty">You did not type anything during this meeting.</p>'
       : dtab === 'transcript'
         ? m.transcript
-          ? `<pre>${esc(m.transcript)}</pre>`
+          ? `<div class="doc script">${renderTranscript(m.transcript)}</div>`
           : '<p class="empty">Not transcribed yet. Use <b>Transcribe &amp; copy prompt</b>.</p>'
         : m.note
-          ? `<pre>${esc(m.note)}</pre>`
+          ? `<div class="doc">${renderMarkdown(m.note)}</div>`
           : `<p class="empty">No write-up saved yet.<br><br>
                Click <b>Transcribe &amp; copy prompt</b>, paste it into Claude or ChatGPT,
                then paste what comes back here and save.</p>
              <textarea id="pasteNote" placeholder="Paste the write-up here…"></textarea>
-             <div class="dacts" style="padding-left:0">
-               <button id="saveNote" class="act tiny">Save write-up</button>
+             <div class="dacts" style="padding:12px 0 0">
+               <button id="saveNote" class="btn sm">Save write-up</button>
              </div>`;
 
   $('detail').innerHTML = `
@@ -636,9 +777,9 @@ function drawDetail(m) {
         ${m.transcribed ? 'transcribed' : 'not transcribed'}${m.hasAudio ? ' · audio kept' : ''}</div>
     </div>
     <div class="dacts">
-      <button id="dWrite" class="act tiny">${m.transcribed ? 'Write up with…' : 'Transcribe, then write up'}</button>
-      <button id="dOpen" class="act ghost tiny">Open folder</button>
-      <button id="dDel" class="act ghost tiny">Delete</button>
+      <button id="dWrite" class="btn primary sm">${m.transcribed ? 'Write up with…' : 'Transcribe, then write up'}</button>
+      <button id="dOpen" class="btn sm">Open folder</button>
+      <button id="dDel" class="btn sm">Delete</button>
     </div>
     <div class="dtabs">
       <button data-t="notes" class="${dtab === 'notes' ? 'on' : ''}">My notes</button>
@@ -736,6 +877,7 @@ $('tabRec').addEventListener('click', () => showView('rec'));
 $('tabLib').addEventListener('click', () => showView('lib'));
 
 window.api.meetingsDir().then((d) => setStatus(`Ready. Saving to ${d}`));
+
 </script>
 </body>
 </html>

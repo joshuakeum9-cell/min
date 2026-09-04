@@ -1,4 +1,4 @@
-# granola-local — context for Claude Code
+# Taonim — context for Claude Code
 
 A local-first meeting notes app. Captures both sides of a call with no bot joining,
 transcribes and writes notes entirely on the user's machine, saves plain markdown

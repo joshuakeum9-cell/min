@@ -1,5 +1,5 @@
 /**
- * granola-local · job 3 — the write-up, without an API key.
+ * Taonim · job 3 — the write-up, without an API key.
  *
  * Assembles the transcript and the notes you typed into a single prompt and puts
  * it on the clipboard. You paste it into whatever assistant you already pay for.

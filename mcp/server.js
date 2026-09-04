@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * granola-local · MCP server.
+ * Taonim · MCP server.
  *
  * Lets an assistant read your meetings straight off disk instead of you pasting
  * a transcript into a chat box. Once connected you can just say:
@@ -16,7 +16,7 @@
  * exists, and nothing is exposed to the network.
  *
  * Connect with:
- *   claude mcp add granola-local -- node "<repo>/mcp/server.js"
+ *   claude mcp add Taonim -- node "<repo>/mcp/server.js"
  * or point any MCP-capable client at this file over stdio.
  */
 
@@ -29,10 +29,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { listMeetings, readMeeting, search, reindex, MEETINGS_DIR } from '../app/library.js';
 
 // The index is a disposable cache and must not live among the user's markdown.
-const INDEX_PATH = path.join(os.tmpdir(), 'granola-local-mcp-index.db');
+const INDEX_PATH = path.join(os.tmpdir(), 'taonim-mcp-index.db');
 
 const server = new McpServer({
-  name: 'granola-local',
+  name: 'Taonim',
   version: '1.0.0',
 });
 

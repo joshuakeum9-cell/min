@@ -1,5 +1,5 @@
 /**
- * Builds granola-local.mcpb — a one-click Claude Desktop extension.
+ * Builds taonim.mcpb — a one-click Claude Desktop extension.
  *
  * An .mcpb is a zip holding an MCP server plus a manifest, installed by
  * double-clicking it or dragging it onto Claude Desktop. That matters here
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const STAGE = path.join(ROOT, 'dist', 'mcpb-stage');
-const OUT = path.join(ROOT, 'dist', 'granola-local.mcpb');
+const OUT = path.join(ROOT, 'dist', 'taonim.mcpb');
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
@@ -30,12 +30,12 @@ const RUNTIME_DEPS = ['@modelcontextprotocol/sdk', 'zod'];
 
 const manifest = {
   manifest_version: '0.3',
-  name: 'granola-local',
-  display_name: 'granola-local meetings',
+  name: 'Taonim',
+  display_name: 'Taonim meetings',
   version: pkg.version,
   description: 'Read and write up your local meeting notes.',
   long_description:
-    'Gives Claude direct access to the meetings recorded by granola-local: the notes you ' +
+    'Gives Claude direct access to the meetings recorded by Taonim: the notes you ' +
     'typed during each call, the transcript with speakers separated into you and them, and ' +
     'the finished write-up.\n\n' +
     'Ask for "a write-up of my 3pm call" and Claude reads the meeting off your disk and ' +
@@ -98,7 +98,7 @@ async function main() {
   await fsp.writeFile(
     path.join(serverDir, 'package.json'),
     JSON.stringify(
-      { name: 'granola-local-mcp', version: pkg.version, type: 'module', private: true, dependencies: versions },
+      { name: 'taonim-mcp', version: pkg.version, type: 'module', private: true, dependencies: versions },
       null,
       2
     ) + '\n'

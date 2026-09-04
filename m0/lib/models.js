@@ -25,12 +25,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  *
  * In development that is ./models next to the source. In a packaged app the
  * source sits inside an asar archive, which is read-only, so the host sets
- * GRANOLA_MODELS_DIR to a writable per-user location before importing this.
+ * TAONIM_MODELS_DIR to a writable per-user location before importing this.
  * Models are never bundled into the installer: they are ~4.6 GB, carry their own
  * licences, and baking them in would make every auto-update re-download the lot.
  */
 export const MODELS_DIR =
-  process.env.GRANOLA_MODELS_DIR || path.resolve(HERE, '../../models');
+  process.env.TAONIM_MODELS_DIR || path.resolve(HERE, '../../models');
 const LOCK_FILE = path.join(MODELS_DIR, 'models.lock.json');
 
 /**
@@ -254,12 +254,12 @@ async function verifyOrPin(key, file, lock) {
   // Hashing the 652 MB encoder before every transcription costs seconds of dead
   // time behind a "Transcribing..." message. If size and mtime are unchanged
   // since the pin, the bytes are unchanged. Existing pins self-upgrade on the
-  // first run after this, and GRANOLA_VERIFY_MODELS=1 forces a full check.
+  // first run after this, and TAONIM_VERIFY_MODELS=1 forces a full check.
   if (
     rec?.sha256 &&
     rec.size === st.size &&
     rec.mtimeMs === st.mtimeMs &&
-    !process.env.GRANOLA_VERIFY_MODELS
+    !process.env.TAONIM_VERIFY_MODELS
   ) {
     return false;
   }
