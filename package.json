@@ -1,6 +1,6 @@
 {
   "name": "min",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Meeting notes that never leave your machine.",
   "type": "module",
@@ -70,7 +70,8 @@
       ],
       "icon": "build/icon.ico",
       "signExecutable": false,
-      "artifactName": "MIN-Setup.${ext}"
+      "artifactName": "MIN-Setup.${ext}",
+      "executableName": "MIN-Notes"
     },
     "nsis": {
       "oneClick": false,
