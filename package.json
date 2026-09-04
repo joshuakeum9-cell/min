@@ -1,0 +1,83 @@
+{
+  "name": "granola-local",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Meeting notes that never leave your machine.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "m0": "node m0/run-all.js",
+    "m0:models": "node m0/lib/models.js",
+    "m0:hw": "node m0/lib/hardware.js",
+    "m0:asr": "node m0/bench-asr.js",
+    "m0:llm": "node m0/bench-llm.js",
+    "m0:eval": "node m0/eval-counterfactual.js",
+    "m0:capture": "electron m0/capture-probe",
+    "start": "electron .",
+    "transcribe": "node app/transcribe.js",
+    "prompt": "node app/prompt.js",
+    "dist": "electron-builder --win --publish never",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "sherpa-onnx-node": "1.13.7"
+  },
+  "devDependencies": {
+    "electron": "44.1.1",
+    "electron-builder": "^26.0.0",
+    "node-llama-cpp": "3.20.0"
+  },
+  "main": "app/main.js",
+  "productName": "granola-local",
+  "author": "Joshua Keum",
+  "license": "MIT",
+  "build": {
+    "appId": "dev.joshuakeum.granolalocal",
+    "productName": "granola-local",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "app/**/*",
+      "m0/lib/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asarUnpack": [
+      "app/asr-worker.js",
+      "**/node_modules/sherpa-onnx-*/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    }
+  }
+}

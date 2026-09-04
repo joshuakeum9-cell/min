@@ -1,0 +1,27 @@
+# Models are fetched at runtime and checksum-pinned — never vendored.
+# ~4.6 GB, and their licences differ from this repo's.
+models/
+
+# models.lock.json IS tracked: it pins the exact bytes each release was built
+# against, so a silently-changed upstream is caught rather than trusted.
+!models/models.lock.json
+
+node_modules/
+dist/
+out/
+
+# Generated test audio — rebuildable, and large.
+fixtures/*.wav
+
+# Real meetings used for the counterfactual gate. These are private by
+# definition: they are transcripts of actual conversations.
+fixtures/meetings/
+
+# Benchmark output is kept as evidence, but not the raw console logs
+# or the generated note pairs (which embed meeting content).
+results/*.log
+results/counterfactual-*/
+
+.DS_Store
+Thumbs.db
+*.local

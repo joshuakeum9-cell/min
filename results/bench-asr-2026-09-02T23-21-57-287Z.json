@@ -1,0 +1,61 @@
+{
+  "benchmark": "bench-asr",
+  "at": "2026-09-02T23:21:57.288Z",
+  "hardware": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpuModel": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "logicalCores": 12,
+    "physicalCores": 6,
+    "ramGB": 15.3,
+    "freeRamGB": 2.7,
+    "gpus": [
+      "NVIDIA GeForce GTX 1660 SUPER",
+      "AMD Radeon(TM) Graphics"
+    ],
+    "nodeVersion": "v24.18.0"
+  },
+  "threads": 4,
+  "sherpaVersion": "1.13.7",
+  "onnxruntimeVersion": "1.27.1",
+  "validTestBed": false,
+  "warnings": [
+    "Discrete GPU present (NVIDIA GeForce GTX 1660 SUPER). Benchmarks must run with the CPU backend forced on, or every number here is meaningless for the target user.",
+    "6 physical cores vs the 4-core target. Expect this machine to be roughly 1.5x faster than the median laptop.",
+    "15.3 GB RAM vs the 8 GB target. The \"can both models be resident at once\" question cannot be answered on this machine."
+  ],
+  "results": [
+    {
+      "model": "parakeet-v2",
+      "wav": "0.wav",
+      "sampleRate": 16000,
+      "audioSeconds": 7.43,
+      "modelLoadMs": 3344,
+      "decodeMsMean": 563,
+      "decodeMsRuns": [
+        563,
+        564
+      ],
+      "realtimeFactor": 13.2,
+      "projected60minSeconds": 273,
+      "peakRssMiB": 48,
+      "transcript": "Well, I don't wish to see it any more, observed Phebe, turning away her eyes. It is certainly very like the old portrait."
+    },
+    {
+      "model": "parakeet-v3",
+      "wav": "en.wav",
+      "sampleRate": 24000,
+      "audioSeconds": 3.85,
+      "modelLoadMs": 3054,
+      "decodeMsMean": 375,
+      "decodeMsRuns": [
+        375,
+        375
+      ],
+      "realtimeFactor": 10.25,
+      "projected60minSeconds": 351,
+      "peakRssMiB": 100,
+      "transcript": "Ask not what your country can do for you, ask what you can do for your country."
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "benchmark": "bench-llm",
+  "at": "2026-09-03T00:17:39.113Z",
+  "hardware": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpuModel": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "logicalCores": 12,
+    "physicalCores": 6,
+    "ramGB": 15.3,
+    "freeRamGB": 3.3,
+    "gpus": [
+      "NVIDIA GeForce GTX 1660 SUPER",
+      "AMD Radeon(TM) Graphics"
+    ],
+    "nodeVersion": "v24.18.0"
+  },
+  "validTestBed": false,
+  "warnings": [
+    "Discrete GPU present (NVIDIA GeForce GTX 1660 SUPER). Benchmarks must run with the CPU backend forced on, or every number here is meaningless for the target user.",
+    "6 physical cores vs the 4-core target. Expect this machine to be roughly 1.5x faster than the median laptop.",
+    "15.3 GB RAM vs the 8 GB target. The \"can both models be resident at once\" question cannot be answered on this machine."
+  ],
+  "lengths": [
+    500,
+    2000
+  ],
+  "noteTokens": 400,
+  "budgetSeconds": 150,
+  "results": [
+    {
+      "model": "qwen3-1.7b",
+      "backend": "cpu",
+      "threads": 4,
+      "modelLoadMs": 3660,
+      "steps": [
+        {
+          "promptTokens": 544,
+          "contextSize": 2048,
+          "timedOut": false,
+          "contextCreateMs": 1019,
+          "prefillMs": 57479,
+          "prefillTokensPerSec": 9.5,
+          "generateMs": 26818,
+          "generatedTokens": 112,
+          "generateTokensPerSec": 4.18,
+          "warmTotalMs": 85316,
+          "peakRssMiB": 2121,
+          "sample": "# Timeline  \n- pilot slipping?  \n- schema freeze Friday  \n\n# Risks  \n- vendor again  \n- legal DPA lead time  \n\n# Mine  \n- open the ticket  \n- commit to vendor in writing this week  \n- ensure legal on "
+        },
+        {
+          "promptTokens": 2038,
+          "contextSize": 3462,
+          "timedOut": true,
+          "error": "2038-token prefill exceeded 150s budget",
+          "budgetMs": 150000
+        }
+      ]
+    }
+  ]
+}

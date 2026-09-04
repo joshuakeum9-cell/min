@@ -1,0 +1,49 @@
+{
+  "benchmark": "bench-llm",
+  "at": "2026-09-03T00:06:40.040Z",
+  "hardware": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpuModel": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "logicalCores": 12,
+    "physicalCores": 6,
+    "ramGB": 15.3,
+    "freeRamGB": 4.6,
+    "gpus": [
+      "NVIDIA GeForce GTX 1660 SUPER",
+      "AMD Radeon(TM) Graphics"
+    ],
+    "nodeVersion": "v24.18.0"
+  },
+  "validTestBed": false,
+  "warnings": [
+    "Discrete GPU present (NVIDIA GeForce GTX 1660 SUPER). Benchmarks must run with the CPU backend forced on, or every number here is meaningless for the target user.",
+    "6 physical cores vs the 4-core target. Expect this machine to be roughly 1.5x faster than the median laptop.",
+    "15.3 GB RAM vs the 8 GB target. The \"can both models be resident at once\" question cannot be answered on this machine."
+  ],
+  "lengths": [
+    500,
+    2000,
+    6000,
+    13000
+  ],
+  "noteTokens": 400,
+  "budgetSeconds": 180,
+  "results": [
+    {
+      "model": "qwen3-1.7b",
+      "backend": "cpu",
+      "threads": 4,
+      "modelLoadMs": 3307,
+      "steps": [
+        {
+          "promptTokens": 544,
+          "contextSize": 2048,
+          "timedOut": true,
+          "error": "544-token prefill exceeded 180s budget",
+          "budgetMs": 180000
+        }
+      ]
+    }
+  ]
+}

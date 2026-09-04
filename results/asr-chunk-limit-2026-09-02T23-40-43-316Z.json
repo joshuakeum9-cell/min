@@ -1,0 +1,268 @@
+{
+  "benchmark": "asr-chunk-limit",
+  "at": "2026-09-02T23:40:43.330Z",
+  "hardware": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpuModel": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "logicalCores": 12,
+    "physicalCores": 6,
+    "ramGB": 15.3,
+    "freeRamGB": 6.7,
+    "gpus": [
+      "NVIDIA GeForce GTX 1660 SUPER",
+      "AMD Radeon(TM) Graphics"
+    ],
+    "nodeVersion": "v24.18.0"
+  },
+  "threads": 4,
+  "warnings": [
+    "Discrete GPU present (NVIDIA GeForce GTX 1660 SUPER). Benchmarks must run with the CPU backend forced on, or every number here is meaningless for the target user.",
+    "6 physical cores vs the 4-core target. Expect this machine to be roughly 1.5x faster than the median laptop.",
+    "15.3 GB RAM vs the 8 GB target. The \"can both models be resident at once\" question cannot be answered on this machine."
+  ],
+  "findings": [
+    {
+      "model": "parakeet-v2",
+      "threads": 4,
+      "maxSeconds": 398,
+      "firstFailSeconds": 420,
+      "error": "2026-09-02 19:30:58.5275244 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/",
+      "bestChunk": {
+        "ok": true,
+        "seconds": 15,
+        "ms": 1012,
+        "rtf": 14.82,
+        "peakRssMiB": 730,
+        "chars": 241
+      },
+      "trials": [
+        {
+          "ok": true,
+          "seconds": 15,
+          "ms": 1012,
+          "rtf": 14.82,
+          "peakRssMiB": 730,
+          "chars": 241
+        },
+        {
+          "ok": true,
+          "seconds": 30,
+          "ms": 3061,
+          "rtf": 9.8,
+          "peakRssMiB": 788,
+          "chars": 484
+        },
+        {
+          "ok": true,
+          "seconds": 60,
+          "ms": 6006,
+          "rtf": 9.99,
+          "peakRssMiB": 792,
+          "chars": 982
+        },
+        {
+          "ok": true,
+          "seconds": 120,
+          "ms": 14625,
+          "rtf": 8.2,
+          "peakRssMiB": 738,
+          "chars": 1995
+        },
+        {
+          "ok": true,
+          "seconds": 180,
+          "ms": 21307,
+          "rtf": 8.45,
+          "peakRssMiB": 742,
+          "chars": 2988
+        },
+        {
+          "ok": true,
+          "seconds": 240,
+          "ms": 33328,
+          "rtf": 7.2,
+          "peakRssMiB": 800,
+          "chars": 3971
+        },
+        {
+          "ok": true,
+          "seconds": 300,
+          "ms": 47890,
+          "rtf": 6.26,
+          "peakRssMiB": 803,
+          "chars": 4974
+        },
+        {
+          "ok": true,
+          "seconds": 360,
+          "ms": 64292,
+          "rtf": 5.6,
+          "peakRssMiB": 810,
+          "chars": 5702
+        },
+        {
+          "ok": false,
+          "seconds": 420,
+          "crashed": true,
+          "exitCode": 3221226505,
+          "signal": null,
+          "error": "2026-09-02 19:30:58.5275244 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/"
+        },
+        {
+          "ok": true,
+          "seconds": 390,
+          "ms": 74822,
+          "rtf": 5.21,
+          "peakRssMiB": 812,
+          "chars": 6188
+        },
+        {
+          "ok": false,
+          "seconds": 405,
+          "crashed": true,
+          "exitCode": 3221226505,
+          "signal": null,
+          "error": "2026-09-02 19:32:23.1646174 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/"
+        },
+        {
+          "ok": true,
+          "seconds": 398,
+          "ms": 76254,
+          "rtf": 5.22,
+          "peakRssMiB": 809,
+          "chars": 6319
+        },
+        {
+          "ok": false,
+          "seconds": 402,
+          "crashed": true,
+          "exitCode": 3221226505,
+          "signal": null,
+          "error": "2026-09-02 19:33:49.0826156 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/"
+        }
+      ]
+    },
+    {
+      "model": "parakeet-v3",
+      "threads": 4,
+      "maxSeconds": 398,
+      "firstFailSeconds": 420,
+      "error": "2026-09-02 19:37:27.2800488 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/",
+      "bestChunk": {
+        "ok": true,
+        "seconds": 15,
+        "ms": 886,
+        "rtf": 16.92,
+        "peakRssMiB": 750,
+        "chars": 319
+      },
+      "trials": [
+        {
+          "ok": true,
+          "seconds": 15,
+          "ms": 886,
+          "rtf": 16.92,
+          "peakRssMiB": 750,
+          "chars": 319
+        },
+        {
+          "ok": true,
+          "seconds": 30,
+          "ms": 1877,
+          "rtf": 15.98,
+          "peakRssMiB": 749,
+          "chars": 625
+        },
+        {
+          "ok": true,
+          "seconds": 60,
+          "ms": 4519,
+          "rtf": 13.28,
+          "peakRssMiB": 754,
+          "chars": 1241
+        },
+        {
+          "ok": true,
+          "seconds": 120,
+          "ms": 11634,
+          "rtf": 10.31,
+          "peakRssMiB": 757,
+          "chars": 2492
+        },
+        {
+          "ok": true,
+          "seconds": 180,
+          "ms": 20904,
+          "rtf": 8.61,
+          "peakRssMiB": 761,
+          "chars": 3746
+        },
+        {
+          "ok": true,
+          "seconds": 240,
+          "ms": 32825,
+          "rtf": 7.31,
+          "peakRssMiB": 770,
+          "chars": 4993
+        },
+        {
+          "ok": true,
+          "seconds": 300,
+          "ms": 48677,
+          "rtf": 6.16,
+          "peakRssMiB": 775,
+          "chars": 6239
+        },
+        {
+          "ok": true,
+          "seconds": 360,
+          "ms": 64698,
+          "rtf": 5.56,
+          "peakRssMiB": 781,
+          "chars": 7481
+        },
+        {
+          "ok": false,
+          "seconds": 420,
+          "crashed": true,
+          "exitCode": 3221226505,
+          "signal": null,
+          "error": "2026-09-02 19:37:27.2800488 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/"
+        },
+        {
+          "ok": true,
+          "seconds": 390,
+          "ms": 85353,
+          "rtf": 4.57,
+          "peakRssMiB": 781,
+          "chars": 8113
+        },
+        {
+          "ok": false,
+          "seconds": 405,
+          "crashed": true,
+          "exitCode": 3221226505,
+          "signal": null,
+          "error": "2026-09-02 19:39:03.2690526 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/"
+        },
+        {
+          "ok": true,
+          "seconds": 398,
+          "ms": 87523,
+          "rtf": 4.55,
+          "peakRssMiB": 783,
+          "chars": 8239
+        },
+        {
+          "ok": false,
+          "seconds": 402,
+          "crashed": true,
+          "exitCode": 3221226505,
+          "signal": null,
+          "error": "2026-09-02 19:40:42.8831124 [E:onnxruntime:, sequential_executor.cc:620 onnxruntime::ExecuteKernel] Non-zero status code returned while running Add node. Name:'/layers.0/"
+        }
+      ]
+    }
+  ]
+}
