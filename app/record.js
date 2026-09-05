@@ -232,6 +232,27 @@ function clearTranscriptSearch() {
   if (count) count.textContent = '';
 }
 
+/**
+ * Re-run whatever is in the search box. Called on every keystroke and again on
+ * every line that streams in, so the card never shows a mix of filtered and
+ * unfiltered speech.
+ */
+function applyTranscriptSearch() {
+  const bubbles = $('bubbles');
+  const search = $('transcriptSearch');
+  if (!bubbles || !search) return;
+  const q = search.value;
+  const n = filterBubbles(bubbles, q);
+  const count = $('transcriptCount');
+  if (!count) return;
+  // Silent when the box is empty: a count beside an empty search box is noise,
+  // and the number it would show is just "all of them". The denominator is what
+  // is on screen rather than what is in memory, because consecutive lines from
+  // one speaker fold into a single bubble.
+  const total = bubbles.querySelectorAll('.bubble').length;
+  count.textContent = q.trim() ? `${n} of ${total}` : '';
+}
+
 function syncPill() {
   const pill = $('micPill');
   const panel = $('transcriptPanel');
@@ -1083,17 +1104,11 @@ export function initNote({ api: bridge, onStatus } = {}) {
   // conversation.js, so it keeps working as bubbles stream in mid-recording.
   const bubbles = $('bubbles');
   if (bubbles) {
-    enableBubbleCopy(bubbles, () => setStatus('Line copied.', 'good'));
-    const search = $('transcriptSearch');
-    const count = $('transcriptCount');
-    search?.addEventListener('input', () => {
-      const q = search.value;
-      const n = filterBubbles(bubbles, q);
-      // Silent when the box is empty: a count beside an empty search box is
-      // noise, and the number it would show is just "all of them".
-      const total = bubbles.querySelectorAll('.bubble').length;
-      if (count) count.textContent = q.trim() ? `${n} of ${total}` : '';
-    });
+    enableBubbleCopy(bubbles, (line, err) =>
+      err
+        ? setStatus('Could not copy: ' + (err.message ?? err), 'warn')
+        : setStatus('Line copied.', 'good'));
+    $('transcriptSearch')?.addEventListener('input', applyTranscriptSearch);
   }
   $('copyTranscript')?.addEventListener('click', async () => {
     const text = transcriptText();
@@ -1117,6 +1132,10 @@ export function initNote({ api: bridge, onStatus } = {}) {
       if (seg?.echo) return;
       currentSegments.push(seg);
       appendBubble($('bubbles'), seg);
+      // A line that lands while a search is open has to face the same filter
+      // the rest of the card is under. Without this it appears unfiltered in a
+      // filtered list, and the count beside the box goes stale.
+      applyTranscriptSearch();
     });
   } catch {}
   try {

@@ -115,7 +115,9 @@ export function renderTranscript(src) {
     .split('\n')
     .filter((l) => l.trim())
     .map((l) => {
-      const m = l.match(/^\[(\d{2}:\d{2}:\d{2})\]\s+(You|Them):\s*(.*)$/);
+      // Two digits or more. hhmmss pads the hour to two but never truncates it,
+      // and a note resumed days later is past 99 hours.
+      const m = l.match(/^\[(\d{2,}:\d{2}:\d{2})\]\s+(You|Them):\s*(.*)$/);
       if (!m) return `<p class="line">${l}</p>`;
       const who = m[2] === 'You' ? 'you' : 'them';
       return (

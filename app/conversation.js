@@ -162,7 +162,9 @@ export function renderBubbles(container, segments, options = {}) {
 // The line format transcribe.js writes. Anything else in the file is either a
 // wrapped continuation of the line above or noise, and is treated as the former
 // so a long utterance is never silently dropped from the conversation.
-const LINE = /^\[(\d{2}):(\d{2}):(\d{2})\]\s+(You|Them):\s*(.*)$/;
+// Two digits or more on the hour: it is padded to two but never truncated,
+// and a meeting resumed days later carries stamps past 99 hours.
+const LINE = /^\[(\d{2,}):(\d{2}):(\d{2})\]\s+(You|Them):\s*(.*)$/;
 
 // transcript.md carries a start time per line and no end. The end is estimated
 // from length so the merge rule has something to work with: a little under
@@ -237,11 +239,19 @@ function copyBubble(el, onCopied) {
   // A failed copy says nothing: the user still has the line on screen.
   Promise.resolve()
     .then(() => navigator.clipboard.writeText(line))
-    .then(() => {
-      el.classList.add('copied');
-      setTimeout(() => el.classList.remove('copied'), COPIED_MS);
-      if (typeof onCopied === 'function') onCopied(line);
-    }, () => {});
+    .then(
+      () => {
+        el.classList.add('copied');
+        setTimeout(() => el.classList.remove('copied'), COPIED_MS);
+        if (typeof onCopied === 'function') onCopied(line, null);
+      },
+      (err) => {
+        // Reported rather than swallowed. The transcript's own Copy button says
+        // why it failed, and a line that silently does nothing when clicked
+        // reads as a broken control rather than as a refused clipboard.
+        if (typeof onCopied === 'function') onCopied(null, err);
+      }
+    );
 }
 
 /**
@@ -332,6 +342,15 @@ function markMatches(host, needle) {
     const raw = node.textContent;
     const hay = raw.toLowerCase();
     if (!hay.includes(needle)) continue;
+    /*
+     * The offsets below index the lowercased copy but slice the original, so
+     * they are only the same positions while the two strings are the same
+     * length. A handful of characters break that, U+0130 being the one that
+     * turns up in real text, and every mark after such a character would then
+     * wrap the wrong run. The bubble still matched and still shows; it simply
+     * goes unhighlighted, which is the harmless half of the choice.
+     */
+    if (hay.length !== raw.length) continue;
 
     const frag = document.createDocumentFragment();
     let cut = 0;
