@@ -23,7 +23,11 @@
     "mcpb": "node mcp/build-bundle.js",
     "mcp": "node mcp/server.js",
     "mcp:test": "node mcp/smoke-test.js",
-    "icon": "python tools/make-icon.py"
+    "icon": "python tools/make-icon.py",
+    "smoke": "node tools/smoke.js",
+    "smoke:packaged": "node tools/smoke.js --packaged",
+    "test": "node app/calendar.test.js && node app/fillers.test.js && node tools/smoke.js",
+    "test:live": "node app/live.test.js --fast"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
