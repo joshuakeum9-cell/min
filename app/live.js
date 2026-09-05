@@ -128,6 +128,7 @@ function frame(track, samples) {
  * @param {number}  [opts.stopTimeoutMs]  how long stop() waits for the last segments, default 60 s
  * @param {number}  [opts.readyTimeoutMs] how long to wait for the model load, default 120 s
  * @param {number}  [opts.maxRestarts]    respawns allowed after a mid-recording crash, default 2
+ * @param {number}  [opts.maxCleanExits]  respawns allowed after a clean early finish, default 6
  * @param {boolean} [opts.stripFillers]   drop standalone uh/um/hm from each line, default false
  * @param {number}  [opts.startOffsetSamples] where this capture sits on the meeting clock,
  *                                        in samples at 16 kHz. Non-zero when resuming.
@@ -147,6 +148,9 @@ export function createLiveSession(opts = {}) {
     stopTimeoutMs = 60_000,
     readyTimeoutMs = 120_000,
     maxRestarts = 2,
+    // Higher than maxRestarts on purpose: a clean early finish costs nothing but
+    // a model reload, where a crash suggests something genuinely wrong.
+    maxCleanExits = 6,
     stripFillers = false,
     startOffsetSamples = 0,
   } = opts;
@@ -173,6 +177,10 @@ export function createLiveSession(opts = {}) {
   let draining = false;
   let restarts = 0;
   let workerDone = false;
+  // Clean finishes have their own budget. A worker that said 'done' did not
+  // crash, so it must not spend the crash allowance or be reported as one.
+  let cleanExits = 0;
+  let lastStdinError = null;
   let workerError = null;
   let stopping = null; // the promise stop() returns
   let stopPending = false; // flush frames are queued or sent
@@ -209,8 +217,17 @@ export function createLiveSession(opts = {}) {
     workerDone = false;
     stderrTail = '';
 
-    // EPIPE after a crash. The close handler is where that gets reported.
-    c.stdin.on('error', () => {});
+    /*
+      * This used to be swallowed entirely, on the reasoning that EPIPE after a
+      * crash is reported by the close handler anyway. But a write failure here
+      * is also a CAUSE, not only a symptom: the worker sees its stdin end and
+      * flushes both tracks, which finishes it cleanly mid-recording. Keeping
+      * the message is what makes that visible afterwards.
+      */
+    c.stdin.on('error', (err) => {
+      lastStdinError = err?.message ?? String(err);
+      onLog?.(`[live] stdin write failed: ${lastStdinError}`);
+    });
 
     readline.createInterface({ input: c.stdout }).on('line', (line) => {
       if (child !== c || !line.trim()) return;
@@ -303,8 +320,40 @@ export function createLiveSession(opts = {}) {
       fail(new Error(`live worker exited before it was ready (${how})${hint ? `: ${hint}` : ''}`));
       return;
     }
+
+    /*
+     * A worker that sent 'done' finished cleanly: it flushed both tracks and
+     * left, and every segment it produced has already been delivered. That is
+     * NOT a crash, and calling it one is what turned a survivable hiccup into
+     * "giving up" after three tries.
+     *
+     * It happens mid-recording when the worker's stdin ends or errors, because
+     * both of those flush both tracks. The cause is upstream of the worker, so
+     * respawning is the right response, but quietly: nothing was lost except
+     * the audio still inside the dead process, and the user does not need a red
+     * message about a transcript that is still working.
+     */
+    if (workerDone) {
+      if (cleanExits >= maxCleanExits) {
+        fail(new Error(
+          `live transcription kept finishing early (${how}, ${cleanExits} times)` +
+          `${lastStdinError ? `, last pipe error: ${lastStdinError}` : ''}. ` +
+          'The recording is unaffected and Write up will transcribe from the audio.'
+        ));
+        return;
+      }
+      cleanExits++;
+      onLog?.(`[live] worker finished early (${how}); restarting quietly, clean exit ${cleanExits}`);
+      spawnWorker();
+      return;
+    }
+
     if (restarts >= maxRestarts) {
-      fail(new Error(`live worker crashed (${how}) and has already been restarted ${restarts} times, giving up`));
+      const hint = stderrTail.trim().split(/\r?\n/).pop() ?? '';
+      fail(new Error(
+        `live worker crashed (${how}) and has already been restarted ${restarts} times, giving up` +
+        `${hint ? `: ${hint}` : ''}. The recording is unaffected and Write up will transcribe from the audio.`
+      ));
       return;
     }
     // A native abort mid-meeting. Whatever was inside the dead worker (its open

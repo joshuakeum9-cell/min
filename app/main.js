@@ -17,6 +17,10 @@ import { app, BrowserWindow, Menu, screen, session, desktopCapturer, ipcMain, sh
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
+// Sync, and only for the live-transcript log: it is written from inside a
+// child-process event handler during a recording, where an unawaited promise
+// would interleave lines from two workers.
+import fsSync from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createSettings } from './settings.js';
@@ -927,6 +931,29 @@ ipcMain.handle('calendar-event-now', () => calendar.eventNow());
 let live = null;
 let liveMeta = null;
 
+/*
+ * Worker stderr, appended to a file beside the settings.
+ *
+ * Bounded by rewriting the file once it passes the cap rather than by holding
+ * the whole thing in memory: this runs during a recording, and a log must never
+ * be the reason a meeting is lost. Failures here are swallowed for the same
+ * reason. It is a debugging aid, not a feature.
+ */
+const LIVE_LOG = path.join(app.getPath('userData'), 'live-transcript.log');
+const LIVE_LOG_MAX = 256 * 1024;
+let liveLogChecked = false;
+
+function appendLiveLog(line) {
+  try {
+    if (!liveLogChecked) {
+      liveLogChecked = true;
+      const size = fsSync.statSync(LIVE_LOG).size;
+      if (size > LIVE_LOG_MAX) fsSync.rmSync(LIVE_LOG, { force: true });
+    }
+    fsSync.appendFileSync(LIVE_LOG, `${new Date().toISOString()} ${line}\n`);
+  } catch { /* a log must never break a recording */ }
+}
+
 ipcMain.handle('live-start', async (_evt, opts) => {
   try {
     const { createLiveSession } = await import('./live.js');
@@ -940,6 +967,15 @@ ipcMain.handle('live-start', async (_evt, opts) => {
       // recording; on a Resume it is the wall gap since the meeting began, so
       // the new lines land after the old ones instead of on top of them.
       startOffsetSamples: offsetSamples(Number(opts?.offsetSeconds) || 0),
+      /*
+       * The worker's stderr, and live.js's own notes about it. This was not
+       * wired at all, so when live transcription failed the reason was captured
+       * into a buffer in live.js and then dropped unless the worker had died
+       * before it was ready. Everything else was invisible, which is why a
+       * clean exit could be reported as a crash for a whole release without
+       * anyone being able to say why.
+       */
+      onLog: (line) => appendLiveLog(line),
       onSegment: (seg) => win?.webContents.send('live-segment', seg),
       onEcho: (seg) => win?.webContents.send('live-segment', { ...seg, echo: true }),
       onReady: () => win?.webContents.send('live-status', { state: 'ready' }),
