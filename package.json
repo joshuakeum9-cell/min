@@ -51,6 +51,7 @@
       "m0/lib/**/*",
       "package.json",
       "!**/*.map",
+      "!app/**/*.test.js",
       "!node_modules/@modelcontextprotocol/**",
       "!tools/**",
       "!build/**"

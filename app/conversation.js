@@ -54,7 +54,9 @@ const nearBottom = (el) => el.scrollHeight - el.scrollTop - el.clientHeight <= F
 function makeBubble(segment, first) {
   const track = trackOf(segment);
   const el = document.createElement('div');
-  el.className = `bubble ${track}`;
+  // `first` is both the label's visibility and the extra gap that separates one
+  // speaker's run from the next, so it goes on the element as well.
+  el.className = `bubble ${track}${first ? ' first' : ''}`;
   el.dataset.t0 = (Number(segment.t0) || 0).toFixed(2);
   el.dataset.t1 = (Number(segment.t1) || Number(segment.t0) || 0).toFixed(2);
 

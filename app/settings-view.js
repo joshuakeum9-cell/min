@@ -76,16 +76,16 @@ export function initSettings({ api }) {
 
   // Feedback for the calendar group. Created beside the test button when the
   // markup has no slot for it, so the count and any error have somewhere to go.
-  let noteEl = $('calendarStatus');
+  let noteEl = $('calendarTestResult');
   if (!noteEl && testBtn) {
     noteEl = document.createElement('span');
-    noteEl.id = 'calendarStatus';
-    noteEl.className = 'settings-note';
+    noteEl.id = 'calendarTestResult';
+    noteEl.className = 'result';
     testBtn.insertAdjacentElement('afterend', noteEl);
   }
   const note = (text, cls = '') => {
     if (!noteEl) return;
-    noteEl.className = ['settings-note', cls].filter(Boolean).join(' ');
+    noteEl.className = ['result', cls].filter(Boolean).join(' ');
     noteEl.textContent = text;
   };
 
@@ -188,11 +188,11 @@ export function initSettings({ api }) {
   // About group. The ids are optional: the version and path rows render when
   // the markup provides them and are skipped otherwise.
   api.meetingsDir?.().then((d) => {
-    const el = $('meetingsPath');
+    const el = $('meetingsDirPath');
     if (el && d) el.textContent = d;
   }).catch(() => {});
   api.appVersion?.().then((v) => {
-    const el = $('settingsVersion');
+    const el = $('aboutVersion');
     if (el && v) el.textContent = 'v' + String(v).replace(/^v/, '');
   }).catch(() => {});
 

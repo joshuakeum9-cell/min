@@ -67,4 +67,19 @@ contextBridge.exposeInMainWorld('api', {
   liveStop: () => ipcRenderer.invoke('live-stop'),
   onLiveSegment: (cb) => subscribe('live-segment', cb),
   onLiveStatus: (cb) => subscribe('live-status', cb),
+
+  /**
+   * Recording state for the floating indicator, the window that shows the
+   * meeting is still being captured once MIN is behind the call app.
+   *
+   * `send` for the same reason as livePush: this fires on every animation tick
+   * while recording, and a level meter that awaited a reply would tie the audio
+   * loop to the main process's event loop.
+   *
+   * @param {{recording:boolean, you:number, them:number,
+   *          title:string}} payload  you/them are 0..1 audio levels.
+   */
+  recordingState: (payload) => ipcRenderer.send('recording-state', payload),
+  /** 'focus' | 'stop', raised by the floating indicator. */
+  onIndicatorCommand: (cb) => subscribe('indicator-command', cb),
 });

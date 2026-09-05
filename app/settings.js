@@ -27,6 +27,13 @@ export const DEFAULTS = Object.freeze({
   provider: '',
   // Keep the window above others while recording.
   alwaysOnTop: true,
+  // Where the user dragged the floating recording indicator, as "x,y" screen
+  // coordinates. Empty means it has never been moved, so it opens at its
+  // default corner. A string rather than a pair of numbers so it rides the
+  // existing typeof allow-list untouched; main parses it with a strict pattern
+  // and clamps the result to a live display, because a saved position is only
+  // ever a hint and the monitor it was saved on may be gone.
+  indicatorPosition: '',
 });
 
 // Only these keys are ever read from disk or accepted from the renderer. A

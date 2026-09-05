@@ -13,7 +13,7 @@
  *     meeting.json     timings, devices, gap markers, integrity check
  */
 
-import { app, BrowserWindow, session, desktopCapturer, ipcMain, shell, clipboard } from 'electron';
+import { app, BrowserWindow, Menu, screen, session, desktopCapturer, ipcMain, shell, clipboard } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
@@ -70,9 +70,56 @@ if (!process.env.MIN_MODELS_DIR) {
   process.env.MIN_MODELS_DIR = path.join(app.getPath('userData'), 'models');
 }
 
+/*
+ * No application menu. Electron ships a default File / Edit / View / Window bar,
+ * and that strip is the single strongest visual cue that a window is a text
+ * editor rather than an application: it is exactly what Notepad wears. Clipboard
+ * and undo shortcuts inside text fields are handled by Chromium itself, not by
+ * these menu roles, so removing the bar costs nothing. Verified by driving
+ * select-all, cut, paste and undo in the real window with the menu removed.
+ */
+Menu.setApplicationMenu(null);
+
 /* ------------------------------------------------------------------- window */
 
 let win = null;
+
+/*
+ * Where a link in the interface is allowed to go. Exact hosts, never a suffix
+ * match: "github.com.example.com" is a different site and must not pass, and
+ * neither should a subdomain nobody has looked at.
+ */
+const LINK_HOSTS = new Set(['github.com']);
+
+function allowedLink(raw) {
+  let u;
+  try { u = new URL(raw); } catch { return false; }
+  return u.protocol === 'https:' && LINK_HOSTS.has(u.hostname);
+}
+
+/**
+ * Keep every window on its own page and send real links to the real browser.
+ *
+ * Without this, an anchor with target="_blank" makes Electron open a second
+ * BrowserWindow inside MIN, so the About tab's GitHub link rendered a live web
+ * page in a frameless window with no address bar, no back button and no way to
+ * tell what it was. Allow-listed links go to the user's browser instead, and
+ * everything else is refused: nothing here is a browser.
+ *
+ * will-navigate covers the same in place. A window navigating away from its own
+ * file is either a bug or someone steering the renderer somewhere it should not
+ * go, and neither is worth honouring.
+ */
+function externalOnly(contents) {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (allowedLink(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
+  });
+  contents.on('will-navigate', (evt, url) => {
+    evt.preventDefault();
+    if (allowedLink(url)) shell.openExternal(url).catch(() => {});
+  });
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -114,6 +161,23 @@ function createWindow() {
     { useSystemPicker: false }
   );
 
+  // The floating indicator is an accessory of this window: it reports what this
+  // window is recording and every command it raises is delivered here. Left
+  // alive on its own it would be an always-on-top pill with nothing behind it,
+  // and on Windows it would also hold the process open past the last real
+  // window, since window-all-closed would never fire.
+  win.on('closed', () => {
+    win = null;
+    destroyIndicator();
+  });
+
+  // Drives the floating indicator: hidden while this window is in front.
+  win.on('focus', syncIndicatorVisibility);
+  win.on('blur', syncIndicatorVisibility);
+  win.on('minimize', syncIndicatorVisibility);
+  win.on('restore', syncIndicatorVisibility);
+
+  externalOnly(win.webContents);
   win.loadFile(path.join(HERE, 'index.html'));
   return win;
 }
@@ -465,6 +529,292 @@ const settings = createSettings(path.join(app.getPath('userData'), 'settings.jso
 ipcMain.handle('settings-get', () => settings.all());
 ipcMain.handle('settings-set', (_evt, patch) => settings.set(patch));
 
+/* --------------------------------------------------------------- indicator */
+
+/**
+ * The floating recording indicator, the nub.
+ *
+ * The problem it solves: the moment the user switches to Zoom or Teams, MIN is
+ * behind another window and every in-app sign that it is recording is hidden.
+ * The nub is a second, tiny window that outlives that switch, so the answer to
+ * "is this being captured?" is always one glance away and never requires
+ * alt-tabbing back.
+ *
+ * It is a separate BrowserWindow rather than page chrome because nothing drawn
+ * inside the main window can be seen while a different application is in front.
+ * That is also why it takes the 'screen-saver' always-on-top level: the normal
+ * level sits below other applications' floating panels, and a video call is
+ * exactly the kind of app that ships them.
+ */
+const INDICATOR_WIDTH = 132;
+const INDICATOR_HEIGHT = 44;
+// Far enough off the corner to clear the taskbar's rounded end and any dock.
+const INDICATOR_MARGIN = 24;
+
+let indicator = null;
+let indicatorReady = false;
+let indicatorMoveTimer = null;
+
+// The last state the renderer reported, kept so a nub created part-way through
+// a recording, or one whose page finishes loading a beat later, has something to
+// draw before the next tick arrives.
+let recordingState = { recording: false, you: 0, them: 0, title: '' };
+
+/**
+ * Everything here crosses from the renderer, so nothing is trusted: levels are
+ * clamped to the 0..1 the bars expect and a NaN becomes 0, because a NaN would
+ * propagate into a CSS length and blank the glyph. The title is truncated
+ * because it is a meeting name the user typed, and the nub is 132px wide.
+ */
+function cleanRecordingState(payload) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  const level = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+  return {
+    recording: Boolean(p.recording),
+    you: level(p.you),
+    them: level(p.them),
+    title: typeof p.title === 'string' ? p.title.slice(0, 120) : '',
+  };
+}
+
+/** "x,y" from settings, or null when unset or malformed. */
+function savedIndicatorPosition() {
+  const raw = settings.get('indicatorPosition');
+  if (typeof raw !== 'string') return null;
+  const m = /^\s*(-?\d{1,6})\s*,\s*(-?\d{1,6})\s*$/.exec(raw);
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+}
+
+/**
+ * Pull a point back onto a screen that is actually attached. Used both when the
+ * nub opens on a saved position and on every step of a manual drag, so it can
+ * never be parked somewhere it cannot be reached from.
+ */
+function clampToDisplay(x, y) {
+  const area = screen.getDisplayNearestPoint({ x, y }).workArea;
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+  return {
+    x: clamp(x, area.x, area.x + area.width - INDICATOR_WIDTH),
+    y: clamp(y, area.y, area.y + area.height - INDICATOR_HEIGHT),
+  };
+}
+
+/**
+ * Where to open the nub: the user's saved spot when there is one, otherwise the
+ * bottom-right of the primary work area.
+ *
+ * The saved point is clamped against the display nearest to it rather than the
+ * primary one. Someone who docks a laptop drags the nub onto the second screen;
+ * undocking retires that screen and leaves the saved coordinates describing a
+ * desktop that no longer exists. Nearest-display resolves to a screen that is
+ * still attached, and the clamp then pulls the window back onto it, so an
+ * unplugged monitor cannot strand the only recording indicator off screen.
+ */
+function indicatorPosition() {
+  const saved = savedIndicatorPosition();
+  if (saved) return clampToDisplay(saved.x, saved.y);
+
+  const area = screen.getPrimaryDisplay().workArea;
+  return {
+    x: area.x + area.width - INDICATOR_WIDTH - INDICATOR_MARGIN,
+    y: area.y + area.height - INDICATOR_HEIGHT - INDICATOR_MARGIN,
+  };
+}
+
+/**
+ * 'moved' fires continuously through a drag, and settings.set writes the file
+ * atomically each time, so persisting on the raw event would be hundreds of
+ * write-and-rename pairs for one gesture. Only the position the drag ends on
+ * matters.
+ */
+function rememberIndicatorPosition() {
+  if (indicatorMoveTimer) clearTimeout(indicatorMoveTimer);
+  indicatorMoveTimer = setTimeout(() => {
+    indicatorMoveTimer = null;
+    if (!indicator || indicator.isDestroyed()) return;
+    const [x, y] = indicator.getPosition();
+    try {
+      settings.set({ indicatorPosition: `${Math.round(x)},${Math.round(y)}` });
+    } catch { /* a position is a convenience; a full disk must not break recording */ }
+  }, 400);
+}
+
+function sendIndicatorState() {
+  if (!indicator || indicator.isDestroyed() || !indicatorReady) return;
+  indicator.webContents.send('indicator-state', recordingState);
+}
+
+function createIndicator() {
+  if (indicator && !indicator.isDestroyed()) return indicator;
+
+  const { x, y } = indicatorPosition();
+  indicatorReady = false;
+  indicator = new BrowserWindow({
+    x,
+    y,
+    width: INDICATOR_WIDTH,
+    height: INDICATOR_HEIGHT,
+    frame: false,
+    transparent: true,
+    // A shadow on a transparent window paints a grey box around the pill on
+    // Windows, which is the "floating white rectangle" bug in miniature.
+    hasShadow: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    // It is not a document, so it has no business in the taskbar or alt-tab.
+    skipTaskbar: true,
+    /*
+     * The property that keeps a click on the pill off the user's call: a
+     * focusable window takes foreground the instant it is touched, which is the
+     * one thing this window must never do. Measured on Windows: with
+     * focusable:false the other app stayed in front, and an otherwise identical
+     * focusable:true window took foreground immediately.
+     *
+     * It costs the drag region: -webkit-app-region:drag is inert here (a
+     * synthetic press-move-release left the window exactly where it started).
+     * But the page does still receive mousedown and mousemove with real screen
+     * coordinates, so indicator.js drags by hand through 'indicator-move' below,
+     * and that was measured moving the window by exactly the requested delta.
+     */
+    focusable: false,
+    // Shown with showInactive once the page has painted, so the pill never
+    // appears as an empty transparent rectangle.
+    show: false,
+    webPreferences: {
+      preload: path.join(HERE, 'indicator-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  // Above ordinary always-on-top windows, which is where video call apps put
+  // their own floating controls.
+  indicator.setAlwaysOnTop(true, 'screen-saver');
+  // A meeting does not stop being recorded because the user swiped to another
+  // desktop or put the call full screen.
+  indicator.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  indicator.webContents.on('did-finish-load', () => {
+    indicatorReady = true;
+    sendIndicatorState();
+    syncIndicatorVisibility();
+  });
+
+  indicator.on('moved', rememberIndicatorPosition);
+  indicator.on('closed', () => {
+    indicator = null;
+    indicatorReady = false;
+  });
+
+  externalOnly(indicator.webContents);
+  indicator.loadFile(path.join(HERE, 'indicator.html'));
+  return indicator;
+}
+
+/*
+ * The nub exists for the whole recording, but it is only worth SEEING once MIN
+ * is behind something else. On top of the note it belongs to it is clutter, and
+ * an always-on-top window covering its own parent is the kind of detail that
+ * makes an app feel unfinished. showInactive rather than show, always: this
+ * window must never take focus, least of all off a live call.
+ */
+function syncIndicatorVisibility() {
+  if (!indicator || indicator.isDestroyed() || !indicatorReady) return;
+  const mainInFront = Boolean(win) && !win.isDestroyed() && win.isFocused() && !win.isMinimized();
+  if (mainInFront) {
+    if (indicator.isVisible()) indicator.hide();
+  } else if (!indicator.isVisible()) {
+    indicator.showInactive();
+  }
+}
+
+/**
+ * Pull a live nub back onto a screen that still exists.
+ *
+ * The open-time clamp in indicatorPosition only runs when the nub is created. A
+ * monitor unplugged mid-recording, or a resolution change, can leave the one
+ * window the user still sees sitting on a desktop that is no longer there.
+ */
+function reclampIndicator() {
+  if (!indicator || indicator.isDestroyed()) return;
+  const [x, y] = indicator.getPosition();
+  const to = clampToDisplay(x, y);
+  if (to.x !== x || to.y !== y) indicator.setPosition(to.x, to.y);
+}
+
+function destroyIndicator() {
+  if (indicatorMoveTimer) {
+    clearTimeout(indicatorMoveTimer);
+    indicatorMoveTimer = null;
+  }
+  if (indicator && !indicator.isDestroyed()) indicator.destroy();
+  indicator = null;
+  indicatorReady = false;
+}
+
+/**
+ * `on`, not `handle`: this arrives up to a dozen times a second while recording
+ * and the renderer has nothing to do with the answer.
+ *
+ * The nub's whole lifetime hangs off this one signal, so there is no second
+ * source of truth about whether it should exist: it appears on the first
+ * recording=true and is gone on recording=false, which covers a manual stop and
+ * every auto-stop the recorder decides on by itself.
+ */
+ipcMain.on('recording-state', (evt, payload) => {
+  // Only the note window drives this. Any other sender is either a bug or a
+  // page that has no business creating an always-on-top window.
+  if (!win || win.isDestroyed() || evt.sender !== win.webContents) return;
+
+  recordingState = cleanRecordingState(payload);
+  if (recordingState.recording) {
+    createIndicator();
+    sendIndicatorState();
+  } else {
+    destroyIndicator();
+  }
+});
+
+/**
+ * The two things the nub can ask for. 'focus' is handled here because it is
+ * about windows; 'stop' is a decision about the recording, which only the note
+ * view knows how to make, so it is forwarded rather than acted on.
+ *
+ * The sender check matches the one on 'recording-state': only the nub may raise
+ * these, and it is the only page whose preload can send them.
+ */
+ipcMain.on('indicator-command', (evt, command) => {
+  if (command !== 'focus' && command !== 'stop') return;
+  if (!indicator || indicator.isDestroyed() || evt.sender !== indicator.webContents) return;
+  if (!win || win.isDestroyed()) return;
+
+  if (command === 'focus') {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return;
+  }
+  win.webContents.send('indicator-command', command);
+});
+
+/**
+ * Manual drag. -webkit-app-region:drag is inert on a focusable:false window
+ * (measured on Windows), and focusable:false is what stops a click on the pill
+ * pulling focus off the call, so the page tracks the pointer itself and asks for
+ * the moves. Clamped to a live display for the same reason a saved position is:
+ * a pill dragged off the edge has no keyboard path back.
+ */
+ipcMain.on('indicator-move', (evt, x, y) => {
+  if (!indicator || indicator.isDestroyed() || evt.sender !== indicator.webContents) return;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const { x: cx, y: cy } = clampToDisplay(Math.round(x), Math.round(y));
+  indicator.setPosition(cx, cy);
+  // Save from here rather than relying on the window's 'moved' event: this is a
+  // programmatic move, and the debounce means a whole drag still writes once.
+  rememberIndicatorPosition();
+});
+
 /* ---------------------------------------------------------------- calendar */
 
 /**
@@ -580,6 +930,10 @@ ipcMain.handle('live-stop', async (_evt, dir) => {
 // A worker holds a 650 MB model and has nothing to report to once the window
 // is gone, so quitting should not leave one running.
 app.on('before-quit', async () => {
+  // First and outside the try: a transparent always-on-top window that outlives
+  // its app is the classic stray-rectangle-on-the-desktop bug, and it must not
+  // depend on whether the worker modules happened to load.
+  destroyIndicator();
   try {
     const { killWorkers } = await import('./transcribe.js');
     killWorkers();
@@ -600,6 +954,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     createWindow();
+    // After ready: the screen module is not usable before it.
+    screen.on('display-removed', reclampIndicator);
+    screen.on('display-metrics-changed', reclampIndicator);
     // After the window, so the first 'calendar-updated' has somewhere to land.
     calendar.start().catch(() => { /* reported through calendar-updated */ });
     app.on('activate', () => {

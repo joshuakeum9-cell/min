@@ -53,6 +53,58 @@ prompt to a subscription you already pay for keeps the installer at about 118 MB
 than 3 GB. `grep -rn "llama\|qwen" app/ mcp/` returns nothing, and `node-llama-cpp` is a
 devDependency used only by the `m0/` benchmarks.
 
+## What is on screen
+
+**Home.** A rail down the left with Home, My notes and Settings. The column beside it
+opens on "Coming up", the meetings on your calendar for the next seven days, under a
+row per day showing the weekday and the date, with today marked by a dot and anything
+already in progress kept at the top. Under that, your notes, grouped by the day they
+were recorded and labelled Today, Yesterday, then the date. The search box
+at the bottom, or Ctrl K from anywhere, searches titles, the notes you typed and the
+full transcripts.
+
+**Connecting a calendar.** One field in Settings, and it is a secret iCal address, not a
+sign-in. In Google Calendar the path is **Settings > your calendar > "Secret address in
+iCal format"**. Paste that URL, press Test connection, and Home fills in. There is no
+Google sign-in, no OAuth, no consent screen and no app verification, because MIN is only
+an HTTPS client fetching one URL, and the same field takes an Outlook, iCloud or Fastmail
+address. It must be `https`, so a `webcal://` link needs its scheme swapped, and the app
+says so. Refresh is every 5, 15 (the default), 30 or 60 minutes. That URL is a bearer
+credential, readable by anyone who has it, so it is kept by the main process in the
+settings file rather than in the renderer, and no error message or log ever prints it.
+Cancelled events are dropped.
+
+**Auto-titling.** Start a recording while an event is on and the note takes that event's
+title and its attendees, and says so with an "Auto-titled from calendar" chip. A meeting
+in progress wins; otherwise the nearest one starting within ten minutes is used, and an
+all-day item is used only if nothing else fits, because "Team offsite" is a true answer
+and a useless recording title. A title you typed yourself is never overwritten.
+
+**The two-sided live transcript.** System audio on the left in grey, your microphone on
+the right in green, because they are two separate recordings and not one mixed one. A
+line appears when its speaker pauses, about a third of a second of silence, so a short
+remark lands a second or two after it is said and a long unbroken stretch waits for the
+10-second soft cap or the 20-second hard cap on a single utterance. Those lines are the
+transcript: `transcript.md` is written from them, and nothing is run over the audio a
+second time. On speakers rather than headphones the far end leaks into your microphone,
+and a line that is the same words on both tracks, quieter on the copy that is the echo,
+is dropped from the transcript rather than shown twice. It is not lost: every dropped
+line is written into `meeting.json` under `echoesSuppressed`, with its text and the line
+it echoed, so the decision can be checked afterwards.
+The whole thing can be turned off in Settings, and then the transcript is written after
+you stop.
+
+**The recording indicator.** In the note, a round waveform button beside Record: grey and
+still when nothing is being captured, olive-green and moving while it is, and clicking it
+shows or hides the transcript. While a recording runs, a small pill also floats above
+every other window, which is the case that matters, because the moment you switch to Zoom
+or Teams every sign inside MIN is hidden. It shows itself only then: while MIN is the
+window in front it hides, because an always-on-top pill covering the note it belongs to
+is clutter. It carries the same levels split left and right,
+an elapsed clock and a stop button, clicking its face brings the note back, and it can be
+dragged anywhere and remembers where. It is deliberately non-focusable, so it cannot take
+focus off the call. It appears when a recording starts and is gone when one ends.
+
 ## Installing
 
 Windows x64, from the
@@ -126,12 +178,27 @@ outside it, in `%APPDATA%\MIN`, or `C:\Users\<you>\AppData\Roaming\MIN`.
 |---|---|
 | `index.db` | The search index, SQLite FTS5. Not a list of keywords: `app/library.js` writes the title, the notes you typed, the **full transcript** and the **full write-up** of every meeting into it as plaintext. A complete, readable, greppable duplicate of every meeting you have recorded, sitting outside your Meetings folder. |
 | `mcp-index.db` | The Claude Desktop extension's own copy of that index, written by `mcp/server.js`, so with the extension installed this folder holds two full plaintext copies of every meeting. Separate file so the two processes never rebuild one database at the same time. |
+| `settings.json` | Your settings, in plaintext, including the secret calendar address. Anyone who can read that file can read that calendar. |
+| `calendar-cache.json` | The last calendar fetch, so Home still has an agenda offline. Plaintext meeting titles, times and attendees. |
 | `models\` | The speech models, 642 MiB. |
 | the rest | Electron's own GPU, network and cache directories. |
 
-**Uninstalling removes none of it.** The installer is built with
-`deleteAppDataOnUninstall: false`, so the indexes, the models and the caches survive an
-uninstall. Delete them yourself:
+On macOS and Linux the same directory is `~/Library/Application Support/MIN` and
+`~/.config/MIN`; only Windows is tested.
+
+## Uninstalling
+
+Windows Settings > Apps removes the program. There is no "Uninstall MIN" entry in the
+Start menu: the installer puts a shortcut to the app there, not to its uninstaller. It deliberately
+leaves your data behind, both of these:
+
+- `~/Meetings`, or `C:\Users\<you>\Meetings`. Your notes and transcripts, untouched.
+  Destroying them on the way out is the one thing an uninstaller must never do.
+- `%APPDATA%\MIN`, or `C:\Users\<you>\AppData\Roaming\MIN`. The indexes, the 642 MiB of
+  models, the settings file with your calendar address in it, and Electron's caches. The
+  installer is built with `deleteAppDataOnUninstall: false`, so all of it survives.
+
+Remove either by hand when you want it gone:
 
 ```powershell
 Remove-Item -Recurse -Force "$env:APPDATA\MIN"
@@ -139,8 +206,15 @@ Remove-Item -Recurse -Force "$env:APPDATA\MIN"
 
 That takes both indexes with it and costs you nothing: they are caches, rebuilt from the
 markdown next time you search, and deleting `models\` only means the next transcription
-downloads them again. On macOS and Linux the same directory is
-`~/Library/Application Support/MIN` and `~/.config/MIN`; only Windows is tested.
+downloads them again. `~/Meetings` is the one to think about before deleting, because
+nothing rebuilds it.
+
+**If a third-party uninstaller says "invalid uninstall command".** Revo Uninstaller and
+tools like it cache the uninstall command from whenever they last scanned, rather than
+reading the registry each time. The executable was renamed in 1.0.2, so an entry cached
+before that points at a name that no longer exists and fails. Nothing is wrong with the
+install: refresh that tool's list, or use Windows Settings > Apps, which reads the live
+registry.
 
 ## Running from source
 

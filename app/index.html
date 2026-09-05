@@ -98,6 +98,29 @@
     --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
     --serif:'Instrument Serif', Georgia, 'Times New Roman', serif;
 
+    /*
+     * Six sizes, nothing between them and nothing below 12px. The window had
+     * drifted to 10px, 10.5px, 11.5px, 12.5px, 13.5px, 15px, 21px, 26px, 27px
+     * and 30px, which is what made one row read as squished beside another that
+     * read as oversized. Every font-size in this file is now one of these.
+     */
+    --fs-display:24px;  /* page titles and the note title */
+    --fs-xl:20px;       /* the largest thing inside a document */
+    --fs-lg:16px;       /* long-form: the notes you type, rendered write-ups */
+    --fs-md:14px;       /* interface default, and transcript bubbles */
+    --fs-sm:13px;       /* controls, labels, secondary text */
+    --fs-xs:12px;       /* the floor: timestamps, meta, help text */
+
+    /*
+     * Three line-heights by role, plus a flat one. --lh-ctl exists because a
+     * single line centred in a box of known height must not carry leading of
+     * its own; the box does the centring. It is never used on wrapping text.
+     */
+    --lh-display:1.2; --lh-title:1.35; --lh-body:1.5; --lh-ctl:1;
+
+    /* One row height for every scannable list: rail, agenda, notes. */
+    --row:34px;
+
     --r-ctl:6px; --r-card:12px; --r-pill:999px;
     --col:640px; --gutter:32px;
   }
@@ -106,7 +129,7 @@
   html, body { height:100%; }
   body {
     margin:0; background:var(--surface); color:var(--ink);
-    font:400 14px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
+    font:400 var(--fs-md)/var(--lh-body) var(--sans); -webkit-font-smoothing:antialiased;
     overflow:hidden;
   }
   .hide { display:none !important; }
@@ -125,31 +148,35 @@
     min-height:0;
   }
   #searchPill {
-    display:flex; align-items:center; gap:8px; height:32px; padding:0 10px;
+    display:flex; align-items:center; gap:8px; height:var(--row); padding:0 10px;
     border-radius:var(--r-pill); border:1px solid var(--hairline);
     background:var(--surface-raised); color:var(--ink-2);
-    font:400 13px/1 var(--sans); margin-bottom:10px; text-align:left;
+    font:400 var(--fs-sm)/var(--lh-ctl) var(--sans); margin-bottom:10px; text-align:left;
   }
   #searchPill:hover { color:var(--ink); }
   #searchPill kbd {
-    margin-left:auto; font:400 10.5px/1 var(--mono); color:var(--ink-3);
+    margin-left:auto; font:400 var(--fs-xs)/var(--lh-ctl) var(--mono); color:var(--ink-3);
     letter-spacing:.02em;
   }
   .railLabel {
-    font:500 11px/1 var(--sans); color:var(--ink-3); letter-spacing:.02em;
+    font:500 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--ink-3); letter-spacing:.02em;
     padding:14px 10px 6px;
   }
   .railItem {
-    display:flex; align-items:center; gap:9px; width:100%; height:32px;
+    display:flex; align-items:center; gap:9px; width:100%; height:var(--row);
     padding:0 10px; border:none; border-radius:8px; background:none;
-    color:var(--ink-2); font:500 13px/1 var(--sans); text-align:left;
+    color:var(--ink-2); font:500 var(--fs-sm)/var(--lh-ctl) var(--sans); text-align:left;
     transition:background .12s, color .12s;
   }
   .railItem:hover { background:var(--rail-hover); color:var(--ink); }
-  /* Selection is a soft fill, not a stripe. A stripe would pull the eye left all day. */
-  .railItem.on { background:var(--rail-active); color:var(--ink); }
+  /*
+   * Selection is a soft fill, not a stripe. A stripe would pull the eye left all day.
+   * .active is the class the router actually sets; .on is kept beside it because
+   * the markup shipped with it and a stale attribute must not blank the rail.
+   */
+  .railItem.on, .railItem.active { background:var(--rail-active); color:var(--ink); }
   .railItem svg { color:var(--ink-3); }
-  .railItem.on svg { color:var(--ink); }
+  .railItem.on svg, .railItem.active svg { color:var(--ink); }
   .railSpacer { flex:1; }
   #workspace {
     display:flex; align-items:center; gap:8px; padding:10px 10px 2px;
@@ -157,10 +184,11 @@
   }
   #workspace .tile {
     width:22px; height:22px; border-radius:var(--r-ctl); background:var(--brand);
-    color:#fff; font:700 12px/22px var(--sans); text-align:center;
+    /* Line-height is the tile height so the single letter centres itself. */
+    color:#fff; font:700 var(--fs-xs)/22px var(--sans); text-align:center;
   }
-  #workspace .wm { font:600 13px/1 var(--sans); letter-spacing:.04em; color:var(--ink); }
-  #appVersion { margin-left:auto; font:400 10.5px/1 var(--mono); color:var(--ink-3); }
+  #workspace .wm { font:600 var(--fs-sm)/var(--lh-ctl) var(--sans); letter-spacing:.04em; color:var(--ink); }
+  #appVersion { margin-left:auto; font:400 var(--fs-xs)/var(--lh-ctl) var(--mono); color:var(--ink-3); }
 
   /* ---------------------------------------------------------------- content */
   #content {
@@ -180,7 +208,26 @@
     width:100%; max-width:calc(var(--col) + 2 * var(--gutter)); margin:0 auto;
     padding:0 var(--gutter) 24px; flex:1; min-height:0; overflow-y:auto;
   }
-  .bar {
+  /*
+   * Direct child of a view on purpose. `bar` is also the class on each <i> in
+   * #levelBars, and unscoped this rule capped every level bar with a hairline.
+   */
+  /*
+   * Scrollbars. The default Windows one is a wide grey slab that reads as
+   * window chrome and fights everything else on the page. Overlay width with a
+   * hairline-family thumb keeps the column the thing you look at.
+   */
+  * { scrollbar-width:thin; scrollbar-color:var(--hairline) transparent; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb {
+    background:var(--hairline); border-radius:999px;
+    border:3px solid transparent; background-clip:content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background:var(--ink-3); background-clip:content-box; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+
+  .view > .bar {
     flex:none; border-top:1px solid var(--hairline); background:var(--surface);
   }
   .barInner {
@@ -189,21 +236,21 @@
   }
 
   h1.display {
-    margin:8px 0 14px; font:400 30px/1.15 var(--serif); letter-spacing:-0.01em;
-    color:var(--ink);
+    margin:8px 0 14px; font:400 var(--fs-display)/var(--lh-display) var(--serif);
+    letter-spacing:-0.01em; color:var(--ink);
   }
   .card {
     background:var(--surface-raised); border:1px solid var(--hairline);
     border-radius:var(--r-card);
   }
-  .empty { color:var(--ink-3); font-size:14px; line-height:1.55; padding:16px; }
+  .empty { color:var(--ink-3); font-size:var(--fs-md); line-height:var(--lh-body); padding:16px; }
 
   /* ---------------------------------------------------------------- buttons */
   .btn {
     display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px;
     border:1px solid var(--hairline); border-radius:var(--r-ctl);
     background:var(--surface-raised); color:var(--ink);
-    font:500 13px/1 var(--sans); white-space:nowrap;
+    font:500 var(--fs-sm)/var(--lh-ctl) var(--sans); white-space:nowrap;
     transition:background .12s, color .12s, border-color .12s;
   }
   .btn:hover { border-color:var(--ink-3); }
@@ -215,14 +262,14 @@
   .btn.primary:hover { background:#000; border-color:#000; }
   .btn.ghost { background:none; border-color:transparent; color:var(--ink-2); }
   .btn.ghost:hover { background:var(--rail-hover); color:var(--ink); }
-  .btn.sm { height:28px; padding:0 10px; font-size:12px; }
+  .btn.sm { height:28px; padding:0 10px; font-size:var(--fs-xs); }
   .btn.icon { width:32px; padding:0; justify-content:center; }
   .btn.icon.on { background:var(--rail-active); color:var(--ink); }
 
   select, input[type=text], input[type=url], input[type=search] {
     height:34px; padding:0 10px; border:1px solid var(--hairline);
     border-radius:var(--r-ctl); background:var(--surface-raised); color:var(--ink);
-    font:400 13.5px/1 var(--sans); outline:none;
+    font:400 var(--fs-sm)/var(--lh-ctl) var(--sans); outline:none;
   }
   select { cursor:pointer; padding-right:6px; font-weight:500; }
   select:focus, input:focus { border-color:var(--ink-3); }
@@ -244,10 +291,11 @@
   .agenda-day { display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; padding:12px 16px; }
   .agenda-day + .agenda-day { border-top:1px solid var(--hairline); }
   .day-head { display:flex; align-items:flex-start; gap:7px; position:relative; }
-  .day-num { font:400 27px/1 var(--serif); color:var(--ink); font-variant-numeric:tabular-nums; }
+  .day-num { font:400 var(--fs-xl)/var(--lh-display) var(--serif); color:var(--ink); font-variant-numeric:tabular-nums; }
   .day-stack {
-    display:flex; flex-direction:column; gap:1px; padding-top:3px;
-    font:400 11px/1.2 var(--sans); color:var(--ink-3); letter-spacing:.01em;
+    /* Nudged so the two small lines still straddle the numeral's x-height. */
+    display:flex; flex-direction:column; gap:1px; padding-top:1px;
+    font:400 var(--fs-xs)/var(--lh-display) var(--sans); color:var(--ink-3); letter-spacing:.01em;
   }
   /* Today gets the only dot in the agenda, so it is findable without reading. */
   .agenda-day.today .day-num { color:var(--accent-ink); }
@@ -256,28 +304,28 @@
     border-radius:var(--r-pill); background:var(--accent);
   }
   .agenda-events { display:flex; flex-direction:column; gap:9px; min-width:0; }
-  .event { display:grid; grid-template-columns:2px minmax(0,1fr); gap:10px; min-width:0; }
+  .event { display:grid; grid-template-columns:2px minmax(0,1fr); gap:10px; min-width:0; min-height:var(--row); }
   /* The rule is its own element rather than a border so it can hold the tone
      colour without the row inheriting it. */
   .event-rule { border-radius:var(--r-pill); background:var(--tone-ink, var(--accent-soft)); }
   .event-body { display:flex; flex-direction:column; gap:2px; min-width:0; padding:1px 0; }
   .event-title-line { display:flex; align-items:baseline; gap:7px; min-width:0; }
   .event-title {
-    font:500 14px/1.35 var(--sans); color:var(--ink);
+    font:500 var(--fs-md)/var(--lh-title) var(--sans); color:var(--ink);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .now-label {
-    flex:none; font:500 10px/1 var(--sans); color:var(--accent-ink);
+    flex:none; font:500 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--accent-ink);
     text-transform:uppercase; letter-spacing:.08em;
   }
   .event-time, .note-time {
-    font:400 11px/1.4 var(--mono); color:var(--ink-3);
+    font:400 var(--fs-xs)/var(--lh-title) var(--mono); color:var(--ink-3);
     font-variant:all-small-caps; letter-spacing:.04em; font-variant-numeric:tabular-nums;
   }
   .agenda-empty { padding:14px 16px; color:var(--ink-3); }
   .agenda-empty.link {
     display:block; width:100%; text-align:left; border:none; background:none;
-    font:400 14px/1.5 var(--sans); border-radius:var(--r-card); cursor:pointer;
+    font:400 var(--fs-md)/var(--lh-body) var(--sans); border-radius:var(--r-card); cursor:pointer;
   }
   .agenda-empty.link:hover { color:var(--ink-2); background:var(--surface); }
 
@@ -288,29 +336,30 @@
    */
   #noteList { margin-top:26px; }
   .note-day-label {
-    font:500 12px/1 var(--sans); color:var(--ink-3); padding:0 10px; margin:18px 0 6px;
+    font:500 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--ink-3); padding:0 10px; margin:18px 0 6px;
   }
   .note-row {
     display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
-    gap:12px; padding:7px 10px; border-radius:8px; cursor:pointer;
+    gap:12px; padding:5px 10px; min-height:var(--row); border-radius:8px; cursor:pointer;
   }
   .note-row:hover, .note-row:focus-visible { background:var(--rail-hover); outline:none; }
   .tile {
     width:32px; height:32px; border-radius:8px;
     background:var(--tone-bg, var(--accent-soft)); color:var(--tone-ink, #fff);
-    font:600 14px/32px var(--sans); text-align:center; text-transform:uppercase;
+    /* Line-height is the tile height, so the initial centres without a flexbox. */
+    font:600 var(--fs-md)/32px var(--sans); text-align:center; text-transform:uppercase;
   }
   .note-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
   .note-title {
-    font:600 14px/1.3 var(--sans); color:var(--ink);
+    font:600 var(--fs-md)/var(--lh-title) var(--sans); color:var(--ink);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .note-sub {
-    font:400 12.5px/1.3 var(--sans); color:var(--ink-3);
+    font:400 var(--fs-xs)/var(--lh-title) var(--sans); color:var(--ink-3);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .list-empty { padding:18px 10px; color:var(--ink-3); }
-  .note-snip { font:400 12px/1.4 var(--sans); color:var(--ink-3); grid-column:2 / -1; margin-top:-4px; }
+  .note-snip { font:400 var(--fs-xs)/var(--lh-title) var(--sans); color:var(--ink-3); grid-column:2 / -1; margin-top:-4px; }
   .note-snip b { color:var(--ink); font-weight:500; }
 
   #askBar .barInner { padding:12px var(--gutter) 16px; }
@@ -322,7 +371,7 @@
   .askInner svg { color:var(--ink-3); }
   #ask {
     flex:1; min-width:0; height:100%; border:none; background:none; padding:0 8px;
-    font:400 14px/1 var(--sans); color:var(--ink); outline:none;
+    font:400 var(--fs-md)/var(--lh-ctl) var(--sans); color:var(--ink); outline:none;
   }
   #ask::placeholder { color:var(--ink-3); }
 
@@ -331,7 +380,7 @@
   #noteHeader { flex:none; padding:4px 0 10px; }
   #noteTitle {
     width:100%; border:none; background:transparent; padding:0; outline:none;
-    font:400 26px/1.2 var(--serif); color:var(--ink); letter-spacing:-0.005em;
+    font:400 var(--fs-display)/var(--lh-display) var(--serif); color:var(--ink); letter-spacing:-0.005em;
   }
   #noteTitle::placeholder { color:var(--ink-3); }
   /* #noteMeta chips are emitted by record.js as span.chip */
@@ -340,14 +389,15 @@
     display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 9px;
     border:1px solid var(--hairline); border-radius:var(--r-pill);
     background:var(--surface-raised); color:var(--ink-2);
-    font:400 11.5px/1 var(--sans); white-space:nowrap;
+    font:400 var(--fs-xs)/var(--lh-ctl) var(--sans); white-space:nowrap;
   }
   .chip.accent { color:var(--accent-ink); border-color:var(--accent-soft); }
 
   #notes {
     flex:1; min-height:220px; width:100%; resize:none; outline:none; border:none;
     background:transparent; color:var(--ink); padding:6px 0 16px;
-    font:400 15px/1.68 var(--sans);
+    /* One step above interface text: this is the surface you type into all meeting. */
+    font:400 var(--fs-lg)/var(--lh-body) var(--sans);
   }
   #notes::placeholder { color:var(--ink-3); }
 
@@ -358,17 +408,25 @@
   #writeRow #openFolder { margin-left:auto; }
 
   /* Rendered markdown, for write-ups and read-mode notes via md.js. */
-  .doc { font:400 15px/1.62 var(--sans); color:var(--ink); }
-  .doc h2, .doc h3, .doc h4 { font-weight:500; letter-spacing:-0.02em; margin:24px 0 8px; line-height:1.15; }
+  /* Reading matches writing: the rendered write-up sits at the same size as #notes. */
+  .doc { font:400 var(--fs-lg)/var(--lh-body) var(--sans); color:var(--ink); }
+  .doc h2, .doc h3, .doc h4 {
+    font-weight:600; letter-spacing:-0.02em; margin:24px 0 8px; line-height:var(--lh-display);
+  }
   .doc > :first-child { margin-top:0; }
-  .doc h2 { font-size:21px; } .doc h3 { font-size:17px; } .doc h4 { font-size:15px; }
+  /* h3 shares the body size; weight and the space above it carry the level. */
+  .doc h2 { font-size:var(--fs-xl); } .doc h3 { font-size:var(--fs-lg); } .doc h4 { font-size:var(--fs-md); }
   .doc p { margin:0 0 12px; }
   .doc ul, .doc ol { margin:0 0 12px; padding-left:20px; }
   .doc li { margin-bottom:5px; }
   .doc li::marker { color:var(--ink-3); }
   .doc strong { font-weight:600; }
   .doc a { color:var(--accent-ink); }
-  .doc code { font:0.87em var(--mono); background:var(--surface-sunken); padding:.12em .38em; border-radius:4px; }
+  /* Not the font shorthand: that would reset the line-height the paragraph set. */
+  .doc code {
+    font-family:var(--mono); font-size:var(--fs-sm);
+    background:var(--surface-sunken); padding:.12em .38em; border-radius:4px;
+  }
   .doc blockquote { margin:0 0 12px; padding-left:12px; border-left:2px solid var(--hairline); color:var(--ink-2); }
   .doc hr { border:none; border-top:1px solid var(--hairline); margin:20px 0; }
 
@@ -381,12 +439,12 @@
     flex:none; display:flex; align-items:center; gap:8px; height:40px;
     padding:0 12px; border-bottom:1px solid var(--hairline);
   }
-  .panelHead .panelTitle { font:600 12.5px/1 var(--sans); color:var(--ink); }
+  .panelHead .panelTitle { font:600 var(--fs-sm)/var(--lh-ctl) var(--sans); color:var(--ink); }
   .liveDot {
     display:none; width:7px; height:7px; border-radius:var(--r-pill); background:var(--danger);
     animation:pulse 1.3s ease-in-out infinite;
   }
-  #transcriptPanel.live .liveDot { display:inline-block; }
+  #transcriptPanel.recording .liveDot { display:inline-block; }
   .panelHead #copyTranscript { margin-left:auto; }
 
   /*
@@ -402,32 +460,94 @@
   }
   .bubble {
     position:relative; max-width:78%; padding:8px 12px; border-radius:12px;
-    font:400 14px/1.45 var(--sans); color:var(--ink); overflow-wrap:anywhere;
+    font:400 var(--fs-md)/var(--lh-body) var(--sans); color:var(--ink); overflow-wrap:anywhere;
   }
   .bubble.them { align-self:flex-start; background:var(--them-bubble); border-bottom-left-radius:4px; }
   .bubble.you { align-self:flex-end; background:var(--you-bubble); border-bottom-right-radius:4px; }
   .bubble.first { margin-top:6px; }
-  .bubble .who { display:block; font:600 10.5px/1 var(--sans); color:var(--ink-3); margin-bottom:4px; letter-spacing:.02em; }
+  .bubble .who { display:block; font:600 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--ink-3); margin-bottom:4px; letter-spacing:.02em; }
+  /* conversation.js hides the label past the first bubble of a run. The rule
+     above is more specific than the browser's own [hidden], so without this
+     the speaker's name repeated on every bubble. */
+  .bubble .who[hidden] { display:none; }
   .bubble .ts {
     position:absolute; top:50%; transform:translateY(-50%); opacity:0; pointer-events:none;
-    font:400 10px/1 var(--mono); color:var(--ink-3); white-space:nowrap;
+    font:400 var(--fs-xs)/var(--lh-ctl) var(--mono); color:var(--ink-3); white-space:nowrap;
     font-variant-numeric:tabular-nums; transition:opacity .12s;
   }
   .bubble.them .ts { left:calc(100% + 8px); }
   .bubble.you .ts { right:calc(100% + 8px); }
   .bubble:hover .ts { opacity:1; }
-  #bubbles .empty { padding:8px 4px; font-size:13px; }
+  #bubbles .empty { padding:8px 4px; font-size:var(--fs-sm); }
 
   /* ---------------------------------------------------------------- noteBar */
+  /*
+   * The pill: one control, first in the bar, that is both the recording tell
+   * and the transcript toggle. That pairing is Granola's, and it is why the
+   * bars are olive rather than red: they are the same green as the "you" side
+   * of the transcript they open, so they read as capture, not as an alarm.
+   *
+   * It sits in the bar rather than floating over the note. Granola's own
+   * version is an overlay and collided with the window chrome at narrow
+   * widths; in the flow it reflows with everything else instead.
+   */
+  #micPill {
+    flex:none; display:inline-flex; align-items:center; justify-content:center; gap:2px;
+    width:44px; height:44px; padding:0;
+    border:1px solid var(--hairline); border-radius:var(--r-pill);
+    background:var(--surface-raised); color:var(--ink-3);
+    transition:border-color .12s, background .12s;
+  }
+  #micPill:hover { border-color:var(--ink-3); }
+  #micPill .waveform { display:flex; align-items:center; gap:2px; height:16px; }
+  /*
+   * Same idiom as #levelBars: record.js writes --lvl (0 to 1) per bar and the
+   * bar scales from a floor of 0.18, so a silent room still shows a glyph
+   * rather than four invisible slivers.
+   */
+  #micPill .waveform i {
+    display:block; width:2px; height:16px; border-radius:1px;
+    background:currentColor; transform-origin:center;
+    transform:scaleY(min(1, calc(var(--rest, .4) + var(--lvl, 0) * var(--k, .6))));
+    transition:transform 90ms linear;
+  }
+  /* The same four --rest/--k pairs the floating nub uses, so a silent room
+     draws the identical waveform glyph in the bar and on the desktop. */
+  #micPill .waveform i:nth-child(1) { --rest:.34; --k:.66; }
+  #micPill .waveform i:nth-child(2) { --rest:.62; --k:.38; }
+  #micPill .waveform i:nth-child(3) { --rest:.5;  --k:.5; }
+  #micPill .waveform i:nth-child(4) { --rest:.3;  --k:.7; }
+  /* A caret drawn from borders, so the pill needs no icon font and no asset. */
+  #micPill .chev {
+    width:0; height:0; margin-left:1px;
+    border-left:3px solid transparent; border-right:3px solid transparent;
+    border-bottom:4px solid currentColor;
+    transition:transform .12s;
+  }
+  /* Down while the transcript is open: the caret points at what it would close. */
+  #micPill[aria-pressed="true"] .chev { transform:rotate(180deg); }
+  /* Recording. Nothing else in the app turns this colour on its own. */
+  #micPill.live { color:var(--accent-ink); border-color:var(--accent-soft); }
+  /*
+   * Fallback only. record.js adds .hum when no audio level has arrived for
+   * 500 ms, so a stalled worklet never leaves four frozen bars claiming to be
+   * a live recording. Real levels win: .hum comes off the moment one lands.
+   */
+  #micPill.live.hum .waveform i { animation:pillHum 1.1s ease-in-out infinite; }
+  #micPill.live.hum .waveform i:nth-child(2) { animation-delay:.13s; }
+  #micPill.live.hum .waveform i:nth-child(3) { animation-delay:.26s; }
+  #micPill.live.hum .waveform i:nth-child(4) { animation-delay:.39s; }
+  @keyframes pillHum { 0%,100% { transform:scaleY(.28); } 50% { transform:scaleY(.85); } }
+
   #recBtn {
     display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 16px;
     border:1px solid var(--accent); border-radius:var(--r-pill);
-    background:var(--accent); color:#fff; font:600 13px/1 var(--sans);
+    background:var(--accent); color:#fff; font:600 var(--fs-sm)/var(--lh-ctl) var(--sans);
     transition:background .12s, color .12s, border-color .12s;
   }
   #recBtn:hover { background:#4f6100; border-color:#4f6100; }
   #recBtn .dot { width:8px; height:8px; border-radius:var(--r-pill); background:currentColor; }
-  #clock { font:500 12.5px/1 var(--mono); font-variant-numeric:tabular-nums; }
+  #clock { font:500 var(--fs-sm)/var(--lh-ctl) var(--mono); font-variant-numeric:tabular-nums; }
   #recBtn:not(.rec-on) #clock { display:none; }
   /* Recording is a warning state, not a brand moment: tinted, not filled. */
   #recBtn.rec-on {
@@ -441,7 +561,7 @@
    * cluster scale by different factors so one number reads as a dancing group.
    * Left cluster is them, right cluster is you, matching the bubble sides.
    */
-  #levelBars { display:flex; align-items:center; gap:14px; height:24px; padding:0 4px; }
+  #levelBars { flex:none; display:flex; align-items:center; gap:14px; height:24px; padding:0 4px; }
   #levelBars .cluster { display:flex; align-items:center; gap:3px; height:22px; }
   #levelBars i {
     display:block; width:3px; height:22px; border-radius:2px;
@@ -453,10 +573,19 @@
   #levelBars i:nth-child(1) { --k:.45; } #levelBars i:nth-child(2) { --k:.8; }
   #levelBars i:nth-child(3) { --k:1; }   #levelBars i:nth-child(4) { --k:.7; }
   #levelBars i:nth-child(5) { --k:.4; }
-  #noteBar:not(.rec-on) #levelBars { opacity:.35; }
+  /* Keyed off the record button rather than a second class on the bar, so
+     there is one source of truth for "is this recording?" to keep in sync. */
+  #noteBar:not(:has(#recBtn.rec-on)) #levelBars { opacity:.35; }
+  /*
+   * At the window's minimum width the bar has four fixed items and one that
+   * must stay readable. The pill already shows the level, so the wide meter is
+   * the one to drop rather than letting #status truncate to nothing.
+   */
+  @media (max-width: 980px) { #noteBar #levelBars { display:none; } }
 
   #status {
-    flex:1; min-width:0; text-align:right; font:400 11px/1.4 var(--mono); color:var(--ink-3);
+    flex:1; min-width:0; text-align:right;
+    font:400 var(--fs-xs)/var(--lh-title) var(--mono); color:var(--ink-3);
     letter-spacing:.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   #status.warn { color:var(--danger); }
@@ -465,29 +594,31 @@
   @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
   @media (prefers-reduced-motion: reduce) {
     #recBtn.rec-on .dot, .liveDot { animation:none; }
-    #levelBars i { transition:none; }
+    #levelBars i, #micPill .waveform i { transition:none; }
+    /* The colour change alone still says "recording" without any movement. */
+    #micPill.live.hum .waveform i { animation:none; }
   }
 
   /* --------------------------------------------------------------- settings */
   .group { padding:4px 16px 14px; margin-bottom:14px; }
-  .group h2 { margin:12px 0 4px; font:600 13px/1.4 var(--sans); color:var(--ink); }
-  .group .lede { margin:0 0 6px; font-size:13px; color:var(--ink-3); }
+  .group h2 { margin:12px 0 4px; font:600 var(--fs-sm)/var(--lh-title) var(--sans); color:var(--ink); }
+  .group .lede { margin:0 0 6px; font-size:var(--fs-sm); color:var(--ink-3); }
   .field { padding:10px 0; display:flex; flex-direction:column; gap:6px; }
   .field + .field { border-top:1px solid var(--hairline); }
-  .field label, .field .label { font:500 13px/1.3 var(--sans); color:var(--ink); }
-  .field .help { font:400 12px/1.5 var(--sans); color:var(--ink-3); margin:0; }
+  .field label, .field .label { font:500 var(--fs-sm)/var(--lh-title) var(--sans); color:var(--ink); }
+  .field .help { font:400 var(--fs-xs)/var(--lh-body) var(--sans); color:var(--ink-3); margin:0; }
   .field .help b { color:var(--ink-2); font-weight:500; }
   .fieldRow { display:flex; align-items:center; gap:8px; }
-  .fieldRow input { flex:1; min-width:0; font-family:var(--mono); font-size:12.5px; }
-  .fieldRow .result { font:400 12px/1 var(--mono); color:var(--ink-3); white-space:nowrap; }
+  .fieldRow input { flex:1; min-width:0; font-family:var(--mono); font-size:var(--fs-sm); }
+  .fieldRow .result { font:400 var(--fs-xs)/var(--lh-ctl) var(--mono); color:var(--ink-3); white-space:nowrap; }
   .fieldRow .result.good { color:var(--accent-ink); }
   .fieldRow .result.warn { color:var(--danger); }
   .check { display:flex; align-items:center; gap:10px; cursor:pointer; }
   .check input { width:15px; height:15px; margin:0; accent-color:var(--accent); }
   .kv { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:8px 0; align-items:baseline; }
   .kv + .kv { border-top:1px solid var(--hairline); }
-  .kv .k { font:400 12.5px/1.5 var(--sans); color:var(--ink-3); }
-  .kv .v { font:400 12.5px/1.5 var(--mono); color:var(--ink-2); overflow-wrap:anywhere; }
+  .kv .k { font:400 var(--fs-sm)/var(--lh-body) var(--sans); color:var(--ink-3); }
+  .kv .v { font:400 var(--fs-sm)/var(--lh-body) var(--mono); color:var(--ink-2); overflow-wrap:anywhere; }
   .kv .v a { color:var(--accent-ink); }
   .kv .v.row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 </style>
@@ -503,7 +634,7 @@
     </button>
 
     <nav>
-      <button id="navHome" class="railItem on">
+      <button id="navHome" class="railItem active">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5h-3v-4H6v4H3a.5.5 0 0 1-.5-.5z"/></svg>
         Home
       </button>
@@ -592,18 +723,30 @@
 
       <div id="noteBar" class="bar">
         <div class="barInner">
+          <!--
+            First in the bar on purpose. It is the one thing you look at to
+            answer "is this recording?", and clicking it opens the transcript
+            it has been filling. record.js drives .live and the bar levels.
+          -->
+          <button id="micPill" type="button" title="Show the transcript"
+                  aria-label="Show the transcript" aria-pressed="false">
+            <span class="waveform" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span class="chev" aria-hidden="true"></span>
+          </button>
           <button id="recBtn" title="Start recording">
             <span class="dot" aria-hidden="true"></span>
             <span class="label">Record</span>
             <span id="clock">00:00</span>
           </button>
+          <!--
+            The .bar class is what record.js looks for. Without it initLevelBars
+            decides the shell shipped no meter and builds a second one, and the
+            note bar ends up with four clusters instead of two.
+          -->
           <div id="levelBars" aria-hidden="true">
-            <span class="cluster them"><i></i><i></i><i></i><i></i><i></i></span>
-            <span class="cluster you"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="cluster them"><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i></span>
+            <span class="cluster you"><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i></span>
           </div>
-          <button id="toggleTranscript" class="btn ghost icon" title="Show the transcript">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 8h1M4.5 5.5v5M7 3v10M9.5 6v4M12 4.5v7M14 8h.5"/></svg>
-          </button>
           <span id="status">Ready.</span>
         </div>
       </div>

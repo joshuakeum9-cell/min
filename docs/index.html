@@ -194,7 +194,7 @@
   <div class="wrap">
     <p class="eyebrow">Local-first meeting notes · Windows</p>
     <h1>Your meetings never leave your&nbsp;<em>machine</em>.</h1>
-    <p class="lede">MIN records both sides of a call without a bot joining, transcribes it on your own computer, and turns the notes you typed into a clean write-up. No account. No API key. No subscription to this. Recording and transcription never touch the network, and your notes are never uploaded.</p>
+    <p class="lede">MIN records both sides of a call without a bot joining, transcribes it on your own computer as the meeting happens, and turns the notes you typed into a clean write-up. No account. No API key. No subscription to this. After the one-time model download, recording and transcription never touch the network, and your notes are never uploaded.</p>
     <div class="cta-row">
       <a class="btn light" href="#download">Download for Windows</a>
       <a class="btn ghost" href="#how">See how it works</a>
@@ -214,7 +214,7 @@
       <div class="step">
         <p class="n">01 · Record</p>
         <h3>Both sides, no bot</h3>
-        <p>Your microphone and the call audio are captured as two separate tracks. Nobody sees a bot join the meeting, because none does.</p>
+        <p>Your microphone and the call audio are captured as two separate tracks. Nobody sees a bot join the meeting, because none does. Start one while a meeting is on your calendar and the note takes that meeting's title and attendees.</p>
       </div>
       <div class="step">
         <p class="n">02 · Type</p>
@@ -238,7 +238,7 @@
     <div class="grid">
       <div class="card">
         <h3>Two tracks, never mixed</h3>
-        <p>"Who said this" is just "which file was it in". No speaker-identification model, no clustering, no guessing, and the two tracks can never drift apart.</p>
+        <p>"Who said this" is just "which file was it in". A tool that works from one mixed recording has to infer the speaker; MIN keeps two recordings, so there is nothing to infer. No speaker-identification model, no clustering, no guessing, and the two tracks can never drift apart.</p>
       </div>
       <div class="card">
         <h3>Speech recognition stays home</h3>
@@ -251,6 +251,22 @@
       <div class="card">
         <h3>The recording is deleted</h3>
         <p>Audio is removed once transcription succeeds, not merely kept locally. If a transcription fails the audio is kept, because then it is the only way to try again.</p>
+      </div>
+      <div class="card">
+        <h3>The conversation, while it happens</h3>
+        <p>The transcript fills in beside your notes as people speak: the call on the left in grey, your microphone on the right in green, already sorted by who said it. A line lands when its speaker pauses, so a short remark appears a second or two later and a long unbroken stretch takes longer. Those lines are the transcript; nothing is run over the audio a second time.</p>
+      </div>
+      <div class="card">
+        <h3>Your calendar, without a sign-in</h3>
+        <p>Paste the secret iCal address from your calendar settings and your next meetings appear on the home screen. No Google sign-in, no OAuth, no consent screen: it is one HTTPS address MIN reads on a timer, and it works with Outlook, iCloud and Fastmail too. That address is a credential, so it stays on your machine and is never printed in a log.</p>
+      </div>
+      <div class="card">
+        <h3>You always know it is recording</h3>
+        <p>A round waveform button in the note is grey and still when nothing is captured and green and moving when it is. Switch to the call and a small pill floats above every window with the levels, the clock and a stop button. It cannot take focus, so it never interrupts the meeting.</p>
+      </div>
+      <div class="card">
+        <h3>Everything is one search away</h3>
+        <p>The home screen is what is coming up and every note you have taken, newest first. One box searches titles, the notes you typed and the full transcripts, on this machine, over the same markdown files you own.</p>
       </div>
     </div>
   </div>
@@ -272,8 +288,10 @@
           <tr><td>Storage, 1 000 hours</td><td>~95 MB of markdown, calculated from transcript sizes rather than timed. Audio is deleted after transcription</td></tr>
           <tr><td>Speaker attribution</td><td>Exact, from separate tracks. No diarization model involved</td></tr>
           <tr><td>Installer</td><td>About 118 MB. Speech models download once on first run, 642 MiB</td></tr>
-          <tr><td>Where things live</td><td>Meetings are markdown in a folder you own. Models, the search index and the MCP index sit in <code>%APPDATA%\MIN</code>, plaintext and searchable. Uninstalling removes neither</td></tr>
-          <tr><td>Network use</td><td>None after first run, unless you choose to send a write-up out</td></tr>
+          <tr><td>Where things live</td><td>Meetings are markdown in a folder you own. Models, the search index, the MCP index, your settings and the cached calendar sit in <code>%APPDATA%\MIN</code>, plaintext and searchable. Uninstalling deliberately removes neither, so notes are never destroyed on the way out</td></tr>
+          <tr><td>Live transcript</td><td>Written as the meeting runs, from the two tracks, with no diarization model. Lines appear when a speaker pauses, so a short remark lands a second or two behind and a single utterance is capped at 20 seconds. It can be switched off, and then the transcript is written after you stop</td></tr>
+          <tr><td>Calendar</td><td>Optional. One secret iCal address, pasted in Settings, fetched over HTTPS every 5 to 60 minutes. No sign-in, no OAuth, no account. Recordings take the title and attendees of the event they start in</td></tr>
+          <tr><td>Network use</td><td>Two things, both your choice: fetching the calendar address you pasted, and sending a write-up out. Nothing else, once the models are downloaded. Notes and transcripts are never uploaded</td></tr>
           <tr><td>Requirements</td><td>Windows 10 or 11, 64-bit. Transcription uses the CPU backend, so no graphics card is needed</td></tr>
           <tr><td>Licence</td><td>MIT. Speech models are CC-BY-4.0 and MIT, fetched at runtime</td></tr>
         </tbody>
@@ -316,7 +334,7 @@
 
 <footer>
   <div class="wrap foot">
-    <p>Free and open source under the MIT licence. No network requests of its own after the first run, no analytics, no account to create.</p>
+    <p>Free and open source under the MIT licence. After the first run it makes no network request you did not ask for: a calendar address you pasted, or a write-up you chose to send. No analytics, no account to create.</p>
     <div class="links">
       <a href="https://github.com/joshuakeum9-cell/min">Source</a>
       <a href="https://github.com/joshuakeum9-cell/min/releases/latest">Releases</a>

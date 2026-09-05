@@ -39,6 +39,16 @@ const MAX_MINUTES = 180;
 // painting on every tick is CPU spent on decoration during a call.
 const LEVEL_FPS = 15;
 
+// The floating indicator lives in its own window and cannot read this DOM, so
+// it is fed by message instead. Twelve a second is enough for bars that read as
+// moving, and an order of magnitude less traffic than the worklet's own rate.
+const STATE_FPS = 12;
+
+// How long the pill waits for a level before falling back to a canned
+// animation. Four frozen bars during a live recording is the one thing the
+// indicator must never show, so a stalled worklet still looks alive.
+const LEVEL_STALE_MS = 500;
+
 // One live frame per track: a quarter second at 16 kHz. Frames this size keep
 // the IPC channel to a few messages a second while staying well under the
 // latency anyone would notice in a scrolling transcript.
@@ -77,7 +87,8 @@ const T = {
 let ctx = null, streams = {}, nodes = [], recording = false;
 let startedAt = 0, tick = null, deviceEvents = [], capTimer = null;
 let starting = false;   // start() awaits several times before disabling the button
-let levelTimer = null;
+let levelTimer = null, stateTimer = null;
+let lastLevelAt = 0;    // when the worklet last handed us a block, for the pill
 
 // Live transcript state for the recording in progress.
 let live = { active: false, frames: null };
@@ -90,8 +101,9 @@ let currentSegments = [];
 
 /** Release every device and node. Safe to call twice. */
 function teardownCapture() {
-  clearInterval(tick); clearTimeout(capTimer); clearInterval(levelTimer);
-  levelTimer = null;
+  clearInterval(tick); clearTimeout(capTimer);
+  clearInterval(levelTimer); clearInterval(stateTimer);
+  levelTimer = null; stateTimer = null;
   for (const n of nodes) { try { n.disconnect(); } catch {} }
   nodes = [];
   for (const st of Object.values(streams)) st?.getTracks().forEach((t) => t.stop());
@@ -146,6 +158,71 @@ function paintLevels(silent = false) {
       list[i].style.setProperty('--lvl', Math.min(1, lvl * shape * jitter).toFixed(3));
     }
   }
+  paintPill(silent);
+}
+
+/* -------------------------------------------------------------- mic pill */
+
+/*
+ * The circular control at the left of the note bar. It is two things at once,
+ * which is how Granola's is built: the bars are the recording tell, and
+ * clicking them opens the transcript they have been filling.
+ */
+const pillBars = [];
+
+function initMicPill() {
+  const pill = $('micPill');
+  if (!pill) return;
+  pillBars.length = 0;
+  pillBars.push(...pill.querySelectorAll('.waveform i'));
+  syncPill();
+}
+
+/**
+ * The caret and aria-pressed follow the panel's visibility rather than a flag
+ * of their own. Several paths open that panel (a live session starting, a
+ * saved transcript loading, the pill itself) and all of them must agree.
+ */
+function syncPill() {
+  const pill = $('micPill');
+  const panel = $('transcriptPanel');
+  if (!pill || !panel) return;
+  const shown = !panel.classList.contains('hide');
+  pill.setAttribute('aria-pressed', String(shown));
+  pill.title = shown ? 'Hide the transcript' : 'Show the transcript';
+}
+
+/**
+ * One control, two tracks: the pill follows whichever side is louder, so it
+ * moves whether you are talking or they are. Only the level and a little
+ * jitter come from here; the per-bar shape is --k in the stylesheet, or the
+ * four bars would rise and fall as one block.
+ */
+function paintPill(silent = false) {
+  const pill = $('micPill');
+  if (!pill) return;
+  const lvl = silent ? 0 : Math.max(T.mic.level, T.sys.level);
+  for (const bar of pillBars) {
+    const jitter = lvl > 0.02 ? 0.75 + Math.random() * 0.5 : 1;
+    bar.style.setProperty('--lvl', Math.min(1, lvl * jitter).toFixed(3));
+  }
+  // Real levels always win. The keyframe covers a stalled worklet, nothing else.
+  pill.classList.toggle('hum', recording && Date.now() - lastLevelAt > LEVEL_STALE_MS);
+}
+
+/**
+ * Tell the floating indicator what this window is doing. Fire and forget, and
+ * every part of it optional: the bridge method may not exist and the channel
+ * may be dead, and neither is allowed to reach the recording.
+ */
+function pushRecordingState() {
+  try {
+    api?.recordingState?.({
+      recording,
+      you: T.mic.level, them: T.sys.level,
+      title: $('noteTitle')?.value.trim() ?? '',
+    });
+  } catch { /* the recording does not depend on the indicator */ }
 }
 
 /* ------------------------------------------------------------- live push */
@@ -221,6 +298,9 @@ async function attach(key, stream) {
     if (data.peak > t.peak) t.peak = data.peak;
     // Same curve the old meter used, so quiet speech still visibly moves.
     t.level = Math.min(1, Math.sqrt(data.peak) * 1.3);
+    // Proof that audio is still flowing, which is what keeps the pill off its
+    // fallback animation. Silence counts: a silent block is still a block.
+    lastLevelAt = Date.now();
     if (live.active) livePushBlock(key, data.pcm);
   };
   const mute = ctx.createGain();
@@ -345,12 +425,17 @@ async function start() {
   startedAt = Date.now();
   recording = true;
   starting = false;
+  // The first block is milliseconds away; dating the level now buys the pill
+  // one stale window of grace so it does not flash its fallback on every start.
+  lastLevelAt = Date.now();
   rec.disabled = false;
   rec.classList.add('rec-on');
   setRecLabel('Stop');
   $('clock')?.classList.add('live');
+  $('micPill')?.classList.add('live');
   $('transcriptPanel')?.classList.add('recording');
   setStatus('Recording...');
+  pushRecordingState();
 
   // Everything from here is decoration or a bonus. Nothing in it may throw
   // into the recording, so each piece is fenced on its own.
@@ -359,6 +444,7 @@ async function start() {
   startLive();
 
   levelTimer = setInterval(() => paintLevels(), Math.round(1000 / LEVEL_FPS));
+  stateTimer = setInterval(pushRecordingState, Math.round(1000 / STATE_FPS));
 
   tick = setInterval(() => {
     const s = Math.floor((Date.now() - startedAt) / 1000);
@@ -396,6 +482,7 @@ async function startLive() {
     }
     live = { active: true, frames: newLiveFrames() };
     $('transcriptPanel')?.classList.remove('hide');
+    syncPill();
     renderBubbles($('bubbles'), [], { live: true });
   } catch (e) {
     setStatus('Live transcript unavailable (' + e.message + '). Recording continues; transcribe after.', 'warn');
@@ -421,8 +508,10 @@ function fail(msg) {
   rec.disabled = false;
   rec.classList.remove('rec-on');
   setRecLabel('Record');
+  $('micPill')?.classList.remove('live', 'hum');
   $('transcriptPanel')?.classList.remove('recording');
   setStatus(msg, 'warn');
+  pushRecordingState();
 }
 
 // Derive the length from the data itself. Trusting a separately-maintained
@@ -443,7 +532,11 @@ async function stopRec() {
   const rec = $('recBtn');
   rec.disabled = true;
   $('clock')?.classList.remove('live');
+  $('micPill')?.classList.remove('live', 'hum');
   $('transcriptPanel')?.classList.remove('recording');
+  // Before the save, which can take a moment: the floating window should go
+  // grey the instant the user presses Stop, not when the disk is done.
+  pushRecordingState();
   setStatus('Saving...');
 
   const endedAt = Date.now();
@@ -641,6 +734,8 @@ function showTranscript(m) {
     currentSegments = [];
     box?.replaceChildren();
   }
+  // Whatever the branch decided, the pill's caret has to match it.
+  syncPill();
 }
 
 /**
@@ -824,6 +919,7 @@ export function initNote({ api: bridge, onStatus } = {}) {
   onStatusCb = typeof onStatus === 'function' ? onStatus : null;
 
   initLevelBars();
+  initMicPill();
   setRecLabel('Record');
   initProviders();
 
@@ -831,7 +927,11 @@ export function initNote({ api: bridge, onStatus } = {}) {
   $('write')?.addEventListener('click', (e) => writeUp(e.currentTarget));
   $('openFolder')?.addEventListener('click', () =>
     api.openFolder(current?.dir).catch((err) => setStatus('Could not open the folder: ' + err.message, 'warn')));
-  $('toggleTranscript')?.addEventListener('click', () => $('transcriptPanel')?.classList.toggle('hide'));
+  // The pill replaces the old toggle button: same job, plus the recording tell.
+  $('micPill')?.addEventListener('click', () => {
+    $('transcriptPanel')?.classList.toggle('hide');
+    syncPill();
+  });
   $('copyTranscript')?.addEventListener('click', async () => {
     const text = transcriptText();
     if (!text) return setStatus('Nothing in the transcript yet.', 'warn');
@@ -871,6 +971,19 @@ export function initNote({ api: bridge, onStatus } = {}) {
       }
     });
   } catch {}
+
+  /*
+   * The floating indicator has none of this window's DOM to click, so its
+   * buttons arrive here as commands. 'stop' takes the Stop button's own path
+   * rather than a shortcut, so the save, the live finish and the button state
+   * all happen exactly as they do from inside the note. 'focus' is handled in
+   * main, which raises this window itself; there is nothing to do here.
+   */
+  try {
+    api.onIndicatorCommand?.((cmd) => {
+      if (cmd === 'stop' && recording) stopRec();
+    });
+  } catch { /* no floating window in this build; the note view is unaffected */ }
 
   window.addEventListener('beforeunload', (e) => {
     if (recording) { e.preventDefault(); e.returnValue = ''; }
@@ -957,6 +1070,7 @@ export function newNote(prefill) {
   $('writeUp')?.classList.add('hide');
   $('bubbles')?.replaceChildren();
   $('transcriptPanel')?.classList.add('hide');
+  syncPill();
   const clock = $('clock');
   if (clock) clock.textContent = '00:00';
   return true;
