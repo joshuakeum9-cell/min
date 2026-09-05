@@ -67,7 +67,8 @@ function clock(d) {
 function timeRange(start, end) {
   if (!start) return '';
   if (!end) return clock(start);
-  return `${clock(start)} to ${clock(end)}`;
+  // U+2013 en dash, the character for a range. Not U+2014, the em dash.
+  return `${clock(start)} – ${clock(end)}`;
 }
 
 function sameLocalDay(a, b) {
@@ -211,17 +212,18 @@ function renderDayHead(date, isToday) {
   const head = el('div', 'day-head');
   const numeral = el('span', 'day-num', String(date.getDate()));
   const stack = el('span', 'day-stack');
-  stack.append(
-    el('span', 'day-month', MONTH_LONG.format(date)),
-    el('span', 'day-weekday', WEEKDAY_SHORT.format(date)),
-  );
-  head.append(numeral, stack);
+  // The month and today's dot share a line, so the dot reads as a mark on the
+  // date rather than as a bullet floating beside the numeral.
+  const monthRow = el('span', 'day-month-row');
+  monthRow.append(el('span', 'day-month', MONTH_LONG.format(date)));
   if (isToday) {
-    head.classList.add('today');
     const dot = el('span', 'today-dot');
     dot.setAttribute('aria-label', 'Today');
-    head.append(dot);
+    monthRow.append(dot);
   }
+  stack.append(monthRow, el('span', 'day-weekday', WEEKDAY_SHORT.format(date)));
+  head.append(numeral, stack);
+  if (isToday) head.classList.add('today');
   return head;
 }
 
@@ -272,8 +274,8 @@ function renderAgenda() {
 
   const now = new Date();
   const groups = agenda.slice();
-  // Today always leads the card, even with nothing left on it, so the "No more
-  // events today" line sits under today's numeral where the eye expects it.
+  // Today always leads the card, even with nothing on it, so the "No events
+  // today" line sits under today's numeral where the eye expects it.
   if (!groups.some((g) => g.isToday)) {
     groups.unshift({ date: startOfDay(now), isToday: true, events: [] });
     groups.sort((a, b) => a.date - b.date);
@@ -283,9 +285,12 @@ function renderAgenda() {
     const day = el('div', 'agenda-day');
     if (g.isToday) day.classList.add('today');
     day.append(renderDayHead(g.date, g.isToday));
+    // The divider between the date and the events. Its own element because it
+    // is a grid track, not a border on either neighbour.
+    day.append(el('span', 'agenda-rule'));
     const list = el('div', 'agenda-events');
     if (!g.events.length) {
-      list.append(el('p', 'agenda-empty muted', 'No more events today'));
+      list.append(el('p', 'agenda-empty muted', 'No events today'));
     } else {
       for (const ev of g.events) list.append(renderEventRow(ev));
     }

@@ -842,7 +842,7 @@ function renderMeta(info) {
   const ev = info?.calendarEvent ?? null;
   const start = info?.startedAt ?? ev?.start;
   const end = info?.endedAt ?? ev?.end;
-  if (start && end) chip(`${fmtTime(start)} to ${fmtTime(end)}`, 'time');
+  if (start && end) chip(`${fmtTime(start)} – ${fmtTime(end)}`, 'time');
   else if (start) chip(fmtTime(start), 'time');
 
   const dur = info?.durationSeconds ??

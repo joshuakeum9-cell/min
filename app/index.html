@@ -294,8 +294,9 @@
   /* ------------------------------------------------------------------- home */
   /*
    * Filled by home.js. Its markup, which these selectors follow exactly:
-   *   .agenda-day(.today) > .day-head > (.day-num, .day-stack > (.day-month,
-   *     .day-weekday), .today-dot)
+   *   .agenda-day(.today) > (.day-head > (.day-num, .day-stack >
+   *     (.day-month-row > (.day-month, .today-dot), .day-weekday)),
+   *     .agenda-rule, .agenda-events)
    *                       > .agenda-events > .event(.now)[style="--tone-ink"]
    *                           > (.event-rule, .event-body > (.event-title-line >
    *                              (.event-title, .now-label), .event-time))
@@ -304,9 +305,14 @@
    * from a hash of the title, so a meeting keeps its colour between sessions.
    */
   #comingUp { padding:4px 0; }
-  /* The date column holds a full month name now, so it is wider, and the
-     row has more air on both sides. */
-  .agenda-day { display:grid; grid-template-columns:112px minmax(0,1fr); gap:16px; padding:14px 22px; }
+  /*
+   * Three columns: the date, a one-pixel divider, then the events. The divider
+   * is its own grid track rather than a border on the date, so it can stretch
+   * the height of the row without the date column owning a border it would
+   * then have to suppress on the last day.
+   */
+  .agenda-day { display:grid; grid-template-columns:104px 1px minmax(0,1fr); gap:0 18px; padding:16px 22px; }
+  .agenda-rule { background:var(--hairline); align-self:stretch; }
   .agenda-day + .agenda-day { border-top:1px solid var(--hairline); }
   .day-head { display:flex; align-items:flex-start; gap:7px; position:relative; }
   /* Sans rather than the display serif, because the serif ships at 400 only
@@ -318,25 +324,35 @@
     display:flex; flex-direction:column; gap:1px; padding-top:2px;
     font:400 var(--fs-xs)/1.25 var(--sans); color:var(--ink-3); letter-spacing:.01em;
   }
-  /* Today gets the only dot in the agenda, so it is findable without reading. */
-  .agenda-day.today .day-num { color:var(--accent-ink); }
+  /* The month and today's dot sit on one line, the weekday under them. */
+  .day-month-row { display:flex; align-items:center; gap:5px; }
+  /* The month is part of the date, so it is read as text. The weekday is a
+     hint about it, so it stays quiet. */
+  .day-month { color:var(--ink); font-weight:500; }
+  .day-weekday { color:var(--ink-3); }
+  /*
+   * Today gets the only dot in the agenda, and nothing else. The numeral was
+   * tinted olive as well, which gave today two marks competing for the same
+   * job; the dot alone is easier to find precisely because it is the only one.
+   */
   .today-dot {
-    position:absolute; left:-12px; top:9px; width:5px; height:5px;
-    border-radius:var(--r-pill); background:var(--accent);
+    flex:none; width:5px; height:5px;
+    border-radius:var(--r-pill); background:var(--danger);
   }
   .agenda-events { display:flex; flex-direction:column; gap:9px; min-width:0; }
-  .event { display:grid; grid-template-columns:4px minmax(0,1fr); gap:12px; min-width:0; min-height:var(--row); }
+  .event { display:grid; grid-template-columns:3px minmax(0,1fr); gap:12px; min-width:0; min-height:var(--row); }
   /* The rule is its own element rather than a border so it can hold the tone
      colour without the row inheriting it. */
   /*
-   * A short, thick tag beside the title, not a rule down the whole row. Its
-   * height is the title line rather than the block, so two-line events do not
-   * grow a longer stripe than one-line ones, and every mark in the agenda is
-   * the same size. A full-height 2px line read as a divider between rows.
+   * The mark beside an event, sized to the title and its time together. It was
+   * 2px running the full height of the row, which read as a divider between
+   * rows rather than as a mark on one; then briefly 4px by 20px, which was
+   * shorter and fatter than it needed to be. Three pixels, inset top and
+   * bottom, is the shape being matched.
    */
   .event-rule {
     border-radius:var(--r-pill); background:var(--tone-ink, var(--accent-soft));
-    align-self:start; height:20px; margin-top:2px;
+    align-self:stretch; margin:2px 0;
   }
   .event-body { display:flex; flex-direction:column; gap:2px; min-width:0; padding:1px 0; }
   .event-title-line { display:flex; align-items:baseline; gap:7px; min-width:0; }
