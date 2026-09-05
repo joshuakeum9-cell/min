@@ -69,9 +69,14 @@ contextBridge.exposeInMainWorld('api', {
    * main write transcript.md; called with nothing, the lines come back in the
    * reply and are never written to disk.
    *
-   * @param {string} [dir]
+   * `segment` is which capture of that meeting this was, 1 for the first and
+   * counting up through every Resume. It decides which wav files may be deleted
+   * once the transcript is safely written, so getting it wrong would delete
+   * another segment's only copy of its audio.
+   *
+   * @param {string} [dir] @param {number} [segment]
    */
-  liveStop: (dir) => ipcRenderer.invoke('live-stop', dir),
+  liveStop: (dir, segment) => ipcRenderer.invoke('live-stop', dir, segment),
   onLiveSegment: (cb) => subscribe('live-segment', cb),
   onLiveStatus: (cb) => subscribe('live-status', cb),
 

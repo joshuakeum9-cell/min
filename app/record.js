@@ -17,6 +17,7 @@
  * post-stop transcribe path still exists.
  */
 import { renderMarkdown } from './md.js';
+import { segmentsOf as segmentsOfMeta } from './meeting-schema.js';
 import {
   renderBubbles, appendBubble, segmentsFromTranscript, enableBubbleCopy, filterBubbles,
 } from './conversation.js';
@@ -88,6 +89,22 @@ const T = {
 
 let ctx = null, streams = {}, nodes = [], recording = false;
 let startedAt = 0, tick = null, deviceEvents = [], capTimer = null;
+
+/*
+ * Stop ends the capture, not the note, and Resume starts another capture into
+ * the same folder. Three numbers keep that honest:
+ *
+ *   meetingStartedAt  when the FIRST capture began, so a resumed capture knows
+ *                     where it sits on the meeting's clock and its transcript
+ *                     lines land after the earlier ones instead of on top.
+ *   capturedBefore    seconds of audio already on disk, so the clock shows the
+ *                     meeting's length and not just this segment's.
+ *   segmentIndex      which capture this is, so the right wav files are the
+ *                     ones deleted when the transcript is safely written.
+ */
+let meetingStartedAt = 0;
+let capturedBefore = 0;
+let segmentIndex = 0;
 let starting = false;   // start() awaits several times before disabling the button
 let levelTimer = null, stateTimer = null;
 let lastLevelAt = 0;    // when the worklet last handed us a block, for the pill
@@ -186,6 +203,23 @@ function initMicPill() {
  * saved transcript loading, the pill itself) and all of them must agree.
  */
 /**
+ * What the Record button offers, and what the clock shows, for whatever meeting
+ * is open. A note with a folder behind it can be carried on with, so the button
+ * says Resume and the clock keeps the meeting's captured length rather than
+ * resetting to zero and implying the audio is gone.
+ */
+function syncRecControl() {
+  const resumable = Boolean(current?.dir);
+  setRecLabel(resumable ? 'Resume' : 'Record');
+  const clock = $('clock');
+  if (!clock) return;
+  const seconds = resumable ? Number(current?.durationSeconds) || 0 : 0;
+  const s = Math.floor(seconds);
+  clock.textContent =
+    `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
  * Drop any active search. Called whenever the bubbles are replaced: a filter
  * left over from the previous note would silently hide most of the new one, and
  * the user has no reason to connect the empty card to a box they typed in
@@ -237,7 +271,11 @@ function paintPill(silent = false) {
  * note it belongs to.
  */
 function capturedSeconds() {
-  return recording && startedAt ? (Date.now() - startedAt) / 1000 : 0;
+  const now = recording && startedAt ? (Date.now() - startedAt) / 1000 : 0;
+  // The meeting's captured time, not this segment's: a Resume shows the clock
+  // carrying on from where Stop left it, which is what the user expects of a
+  // meeting that was paused rather than of a second recording.
+  return capturedBefore + now;
 }
 
 function pushRecordingState() {
@@ -385,10 +423,17 @@ async function start() {
   // the frame counters then disagree with the data and concat() throws on Stop,
   // outside the try, losing the meeting and wedging the button.
   if (recording || starting) return;
-  if (current) {
-    // The view holds a saved meeting. A new recording is a new note.
-    newNote();
-  }
+  /*
+   * A saved meeting open in this view is RESUMED, not replaced. This is the one
+   * behaviour change a user will notice: pressing Record with a note open used
+   * to silently start a second note, so a meeting stopped for a five minute
+   * break came back as two unrelated recordings that had to be reconciled by
+   * hand. "+ New note" is how you start a fresh one, and the button says
+   * Resume rather than Record whenever that is what it will do.
+   *
+   * A meeting with no folder on disk is not resumable, so that still starts new.
+   */
+  if (current && !current.dir) newNote();
   starting = true;
   const rec = $('recBtn');
   rec.disabled = true;
@@ -449,6 +494,22 @@ async function start() {
   }
 
   startedAt = Date.now();
+  /*
+   * Resuming an existing meeting, or beginning a new one. Read from `current`,
+   * which is whatever is on disk, rather than from a counter kept in this
+   * window: the user may have quit and come back, and the folder is the only
+   * thing that knows how much of this meeting has already been recorded.
+   */
+  if (current?.dir) {
+    const prior = segmentsOfMeta(current.meta);
+    meetingStartedAt = Date.parse(prior[0]?.startedAt ?? current.startedAt ?? '') || startedAt;
+    capturedBefore = prior.reduce((n, x) => n + (Number(x.durationSeconds) || 0), 0);
+    segmentIndex = prior.length + 1;
+  } else {
+    meetingStartedAt = startedAt;
+    capturedBefore = 0;
+    segmentIndex = 1;
+  }
   recording = true;
   starting = false;
   // The first block is milliseconds away; dating the level now buys the pill
@@ -500,7 +561,12 @@ async function startLive() {
     const settings = (await api.settingsGet?.()) ?? {};
     if (!settings.liveTranscript || typeof api.liveStart !== 'function') return;
     if (!recording) return; // stopped during the await
-    const r = await api.liveStart({ title: $('noteTitle')?.value.trim() ?? '' });
+    const r = await api.liveStart({
+      title: $('noteTitle')?.value.trim() ?? '',
+      // Zero on a first capture. On a Resume this is the wall gap since the
+      // meeting began, which is what puts the new lines on the meeting clock.
+      offsetSeconds: meetingStartedAt ? Math.max(0, (startedAt - meetingStartedAt) / 1000) : 0,
+    });
     if (!recording) return;
     if (!r?.ok) {
       setStatus('Live transcript unavailable (' + (r?.error ?? 'unknown') + '). Recording continues; transcribe after.', 'warn');
@@ -510,7 +576,10 @@ async function startLive() {
     $('transcriptPanel')?.classList.remove('hide');
     syncPill();
     clearTranscriptSearch();
-    renderBubbles($('bubbles'), [], { live: true });
+    // Resuming keeps what was already said on screen and appends to it. Wiping
+    // it would look like the first half of the meeting had been lost, and the
+    // new lines carry meeting-clock timestamps that follow on from these.
+    renderBubbles($('bubbles'), currentSegments, { live: true });
   } catch (e) {
     setStatus('Live transcript unavailable (' + e.message + '). Recording continues; transcribe after.', 'warn');
   }
@@ -583,7 +652,10 @@ async function stopRec() {
     mic = concat(T.mic.chunks);
     sys = concat(T.sys.chunks);
     T.mic.chunks = []; T.sys.chunks = [];
-    const { dir, meta } = await api.saveMeeting({
+    const { dir, meta, segment } = await api.saveMeeting({
+      // With a folder, this capture is appended to that meeting as another
+      // segment. Without one, it starts a new meeting.
+      dir: current?.dir,
       startedAt, endedAt,
       title: $('noteTitle')?.value.trim() ?? '',
       notes: $('notes')?.value ?? '',
@@ -597,13 +669,18 @@ async function stopRec() {
       },
       calendarEvent,
     });
-    saved = { dir, meta };
+    saved = { dir, meta, segment };
     current = {
       dir, title: meta.title, startedAt: meta.startedAt, endedAt: meta.endedAt,
-      durationSeconds: meta.durationSeconds, transcribed: false, written: false, meta,
+      durationSeconds: meta.durationSeconds,
+      transcribed: Boolean(meta.transcript), written: current?.written ?? false, meta,
     };
+    // What a further Resume would append to, so the clock carries on and the
+    // next segment gets the right index even without reloading from disk.
+    capturedBefore = Number(meta.durationSeconds) || capturedBefore;
+    segmentIndex = segment?.index ?? segmentIndex;
     $('writeRow')?.classList.remove('hide');
-    renderMeta({ ...meta, calendarEvent, autoTitled: Boolean(calendarEvent) });
+    renderMeta({ ...meta, meta, calendarEvent, autoTitled: Boolean(calendarEvent) });
 
     const bad = Object.entries(meta.tracks).filter(([, t]) => t.silent).map(([k]) => k);
     if (bad.length) setStatus(`Saved, but ${bad.join(' and ')} captured silence.`, 'warn');
@@ -635,6 +712,9 @@ async function stopRec() {
   // anything waits on the worker's last lines. Its result is a transcript.md
   // written by main; the segments it returns are only the fallback picture.
   if (wasLive) await finishLive(saved);
+  // The note is still open and still has a folder behind it, so the button
+  // offers to carry on with it rather than to start something unrelated.
+  syncRecControl();
 }
 
 async function finishLive(saved) {
@@ -644,7 +724,7 @@ async function finishLive(saved) {
     setStatus('Finishing the live transcript...');
     // The folder the save above produced. Without it main has nowhere to put
     // transcript.md, which is how every live transcript used to be discarded.
-    result = await api.liveStop(saved?.dir);
+    result = await api.liveStop(saved?.dir, saved?.segment?.index);
   } catch (e) {
     setStatus('Live transcript did not finish (' + e.message + '). Use Write up to transcribe from the audio.', 'warn');
     return;
@@ -747,6 +827,18 @@ function renderMeta(info) {
   const dur = info?.durationSeconds ??
     (ev?.start && ev?.end ? (new Date(ev.end) - new Date(ev.start)) / 1000 : null);
   if (dur) chip(fmtDuration(dur), 'duration');
+
+  /*
+   * Only once a meeting has actually been stopped and resumed. Then the
+   * duration chip is captured time and the span is the wall window, and
+   * without saying so a 40 minute chip on a meeting the user remembers as an
+   * hour looks like lost audio rather than a break they took.
+   */
+  const parts = segmentsOfMeta(info?.meta ?? info).length;
+  if (parts > 1) {
+    const span = Number((info?.meta ?? info)?.spanSeconds) || 0;
+    chip(span ? `${parts} parts over ${fmtDuration(span)}` : `${parts} parts`, 'segments');
+  }
 
   const names = attendeeNames(ev);
   const count = names.length || Number(ev?.attendeeCount) || 0;
@@ -1102,13 +1194,18 @@ export async function openMeeting(meeting) {
     durationSeconds: m.durationSeconds,
     calendarEvent,
     autoTitled: Boolean(calendarEvent),
+    meta: m.meta,
   });
   $('writeRow')?.classList.remove('hide');
   if (!m.transcript) $('transcriptPanel')?.classList.add('hide');
   showTranscript(m);
   showWriteUp(m);
-  const clock = $('clock');
-  if (clock) clock.textContent = '00:00';
+  // Opened from disk, so the counters this window kept are meaningless until
+  // start() reads them back out of the folder.
+  meetingStartedAt = 0;
+  capturedBefore = 0;
+  segmentIndex = 0;
+  syncRecControl();
   return true;
 }
 
@@ -1126,6 +1223,9 @@ export function newNote(prefill) {
   currentSegments = [];
   lastSavedNotes = null;
   calendarEvent = prefill?.calendarEvent ?? null;
+  meetingStartedAt = 0;
+  capturedBefore = 0;
+  segmentIndex = 0;
 
   const title = $('noteTitle');
   if (title) title.value = prefill?.title ?? calendarEvent?.title ?? '';
@@ -1142,8 +1242,7 @@ export function newNote(prefill) {
   $('bubbles')?.replaceChildren();
   $('transcriptPanel')?.classList.add('hide');
   syncPill();
-  const clock = $('clock');
-  if (clock) clock.textContent = '00:00';
+  syncRecControl();
   return true;
 }
 

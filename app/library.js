@@ -20,6 +20,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
+import { segmentsOf, pendingSegments } from './meeting-schema.js';
 
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
 
@@ -107,10 +108,21 @@ export async function readMeeting(dir) {
     };
   }
 
-  const hasAudio = await fsp
-    .stat(path.join(dir, 'mic.wav'))
-    .then((s) => s.size > 44)
-    .catch(() => false);
+  /*
+   * Any segment's audio counts. A meeting stopped and resumed keeps a wav per
+   * capture, and the first segment's mic.wav is deleted as soon as ITS
+   * transcript is written, so checking only mic.wav would report a meeting with
+   * two hours of untranscribed audio in mic-2.wav as having none at all.
+   */
+  const wavs = segmentsOf(meta).flatMap((seg) => [seg.files?.mic, seg.files?.system]);
+  const sizes = await Promise.all(
+    [...new Set(wavs.filter((f) => typeof f === 'string' && f))].map((f) =>
+      fsp.stat(path.join(dir, f)).then((st) => st.size).catch(() => 0))
+  );
+  const hasAudio = sizes.some((n) => n > 44);
+  // Audio still on disk that nothing has transcribed. This is what decides
+  // whether Write up offers to run the post-recording pass at all.
+  const transcriptPending = hasAudio && pendingSegments(meta).length > 0;
 
   return {
     dir,
@@ -124,6 +136,7 @@ export async function readMeeting(dir) {
     transcript,
     note,
     hasAudio,
+    transcriptPending,
     transcribed: Boolean(transcript),
     written: Boolean(note),
     meta,
@@ -180,6 +193,24 @@ const sizeOf = (file) => fsp.stat(file).then((s) => s.size).catch(() => 0);
  * Degrades the same way readMeeting does: a missing or corrupt meeting.json is
  * reconstructed from the folder name, and a folder with nothing in it is null.
  */
+/**
+ * Does this meeting still have audio on disk?
+ *
+ * mic.wav answers it for a meeting that was never resumed, and that stat has
+ * already been paid for by the time this is called. Only a resumed meeting
+ * whose first segment's audio has already been deleted needs the extra look, so
+ * the fast path stays one stat for the case that is almost always true.
+ */
+async function anyAudio(dir, meta, micBytes) {
+  if (micBytes > 44) return true;
+  const later = segmentsOf(meta)
+    .flatMap((seg) => [seg.files?.mic, seg.files?.system])
+    .filter((f) => typeof f === 'string' && f && f !== 'mic.wav');
+  if (!later.length) return false;
+  const sizes = await Promise.all([...new Set(later)].map((f) => sizeOf(path.join(dir, f))));
+  return sizes.some((n) => n > 44);
+}
+
 export async function summariseMeeting(dir) {
   const [metaRes, hasTranscript, hasNote, notesBytes, micBytes] = await Promise.all([
     readCapped(path.join(dir, 'meeting.json')),
@@ -220,7 +251,8 @@ export async function summariseMeeting(dir) {
     // Bytes, not characters: the point is "did they type anything", and a
     // count that needs the file read defeats the purpose of this function.
     notesBytes: Math.max(0, notesBytes - 1),
-    hasAudio: micBytes > 44,
+    hasAudio: await anyAudio(dir, meta, micBytes),
+    transcriptPending: pendingSegments(meta).length > 0,
     transcribed: hasTranscript,
     written: hasNote,
     metaBroken: Boolean(meta.metaBroken),

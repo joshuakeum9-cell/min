@@ -31,6 +31,9 @@ import { fileURLToPath } from 'node:url';
 import { ensureModel, parakeetPaths, llmPath } from '../m0/lib/models.js';
 import { detectHardware, isMain } from '../m0/lib/hardware.js';
 import { stripFillers as removeFillers } from './fillers.js';
+import {
+  segmentsOf, pendingSegments, shiftResults, appendTranscript,
+} from './meeting-schema.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Inside a packaged app this file lives in app.asar, but the worker is spawned by
@@ -303,12 +306,108 @@ async function findMeetings(explicit, all) {
   if (!dirs.length) return [];
   if (!all) return [dirs[dirs.length - 1]];
 
+  /*
+   * The presence of transcript.md is no longer the answer. A meeting stopped
+   * and resumed can have its first part transcribed live, so the file exists,
+   * while a later part still has audio nobody has read. meeting.json is what
+   * knows, so it is read; a folder without one is judged the old way.
+   */
   const pending = [];
   for (const d of dirs) {
+    let meta = null;
+    try { meta = JSON.parse(await fsp.readFile(path.join(d, 'meeting.json'), 'utf8')); } catch { /* below */ }
+    if (meta) {
+      if (pendingSegments(meta).length) pending.push(d);
+      continue;
+    }
     const done = await fsp.stat(path.join(d, 'transcript.md')).then(() => true).catch(() => false);
     if (!done) pending.push(d);
   }
   return pending;
+}
+
+/**
+ * One capture of a meeting, transcribed.
+ *
+ * Everything here is per segment: its own two wavs, its own pair of workers and
+ * its own timeline starting at zero. The caller shifts the result onto the
+ * meeting's clock, because only the caller knows where this capture sits in it.
+ */
+async function transcribeSegment(dir, segment, ctx) {
+  const { modelDir, vadModel, threads, quiet, log, opts } = ctx;
+  const files = segment.files ?? { mic: 'mic.wav', system: 'system.wav' };
+
+  const present = [];
+  for (const t of TRACKS) {
+    const name = t.file === 'mic.wav' ? files.mic : files.system;
+    const p = path.join(dir, name);
+    const size = await fsp.stat(p).then((st) => st.size).catch(() => null);
+    if (size == null || size <= 44) continue;
+    if (size > MAX_WAV_BYTES) {
+      log(`   ! ${name} is ${(size / 1e9).toFixed(1)} GB, over the 2 GB limit, skipped`);
+      continue;
+    }
+    present.push({ ...t, name, wav: p });
+  }
+  if (!present.length) return null;
+
+  const t0 = Date.now();
+  // Both tracks at once. Halve the threads each so they do not fight for cores.
+  // Segments run one after another rather than all at once: each worker holds a
+  // model, and four of them will not fit on the 8 GB machine this targets.
+  const per = Math.max(1, Math.floor(threads / present.length));
+  const results = await Promise.all(
+    present.map((t) =>
+      runWorker({
+        wav: t.wav,
+        speaker: t.speaker,
+        modelDir,
+        vadModel,
+        threads: per,
+        onProgress: (speaker, doneCount, total) => {
+          if (!quiet && total) process.stdout.write(`\r   ${speaker}: ${doneCount}/${total} utterances   `);
+        },
+      })
+    )
+  );
+  if (!quiet) process.stdout.write('\r' + ' '.repeat(50) + '\r');
+
+  for (const f of results.filter((r) => !r.ok)) {
+    log(
+      `   ! ${f.speaker} worker ${f.crashed ? 'ABORTED (native crash)' : 'failed'} ` +
+        `exit=${f.exitCode}${f.signal ? ` signal=${f.signal}` : ''}`
+    );
+    if (f.stderr) log(`     ${f.stderr.split('\n')[0]}`);
+  }
+  for (const r of results) {
+    if (r.meta) {
+      log(
+        `   ${r.speaker.padEnd(5)} ${String(r.meta.segments ?? 0).padStart(3)} utterances - ` +
+          `${r.meta.voicedSeconds}s voiced of ${r.meta.totalSeconds}s - ${((r.meta.ms ?? 0) / 1000).toFixed(1)}s`
+      );
+    }
+  }
+
+  // Decide success BEFORE anything is written. A partial transcript written to
+  // the canonical name marks the meeting done forever: library.js treats any
+  // transcript.md as finished, the GUI stops offering to retry, and --all skips
+  // the folder, while the other speaker's half is simply missing.
+  const allOk = results.every((r) => r.ok);
+
+  /*
+   * Onto the meeting's clock before the bleed check, not after. Suppression
+   * compares start times across the two tracks, and both tracks of one segment
+   * shift by the same amount, so the comparison is unchanged; doing it here
+   * means everything downstream, the text and the echo records alike, carries
+   * meeting-relative times.
+   */
+  const shifted = shiftResults(results, Number(segment.offsetSeconds) || 0);
+  const { text, count, suppressed } = buildTranscript(shifted, {
+    noBleedSuppression: opts.noBleedSuppression,
+    stripFillers: opts.stripFillers !== false,
+  });
+
+  return { present, results, allOk, text, count, suppressed, wallMs: Date.now() - t0 };
 }
 
 export async function transcribeMeeting(dir, opts = {}) {
@@ -319,91 +418,6 @@ export async function transcribeMeeting(dir, opts = {}) {
   const vadModel = llmPath('silero-vad');
   await ensureModel('silero-vad');
 
-  const present = [];
-  for (const t of TRACKS) {
-    const p = path.join(dir, t.file);
-    const size = await fsp.stat(p).then((s) => s.size).catch(() => null);
-    if (size == null || size <= 44) continue;
-    if (size > MAX_WAV_BYTES) {
-      log(`   ⚠ ${t.file} is ${(size / 1e9).toFixed(1)} GB, over the 2 GB limit, skipped`);
-      continue;
-    }
-    present.push({ ...t, wav: p });
-  }
-  if (!present.length) {
-    throw new Error(`No audio in ${dir}. Already transcribed, or the recording failed.`);
-  }
-
-  log(`\n▸ ${path.basename(dir)}`);
-  const t0 = Date.now();
-
-  // Both tracks at once. Halve the threads each so they do not fight for cores.
-  const per = Math.max(1, Math.floor(threads / present.length));
-  const results = await Promise.all(
-    present.map((t) =>
-      runWorker({
-        wav: t.wav,
-        speaker: t.speaker,
-        modelDir,
-        vadModel,
-        threads: per,
-        onProgress: (speaker, done, total) => {
-          if (!quiet && total) process.stdout.write(`\r   ${speaker}: ${done}/${total} utterances   `);
-        },
-      })
-    )
-  );
-  if (!quiet) process.stdout.write('\r' + ' '.repeat(50) + '\r');
-
-  const failed = results.filter((r) => !r.ok);
-  for (const f of failed) {
-    log(
-      `   ⚠ ${f.speaker} worker ${f.crashed ? 'ABORTED (native crash)' : 'failed'} ` +
-        `exit=${f.exitCode}${f.signal ? ` signal=${f.signal}` : ''}`
-    );
-    if (f.stderr) log(`     ${f.stderr.split('\n')[0]}`);
-  }
-
-  for (const r of results) {
-    if (r.meta) {
-      log(
-        `   ${r.speaker.padEnd(5)} ${String(r.meta.segments ?? 0).padStart(3)} utterances · ` +
-          `${r.meta.voicedSeconds}s voiced of ${r.meta.totalSeconds}s · ${((r.meta.ms ?? 0) / 1000).toFixed(1)}s`
-      );
-    }
-  }
-
-  // Decide success BEFORE writing anything. A partial transcript written to the
-  // canonical name marks the meeting done forever: library.js treats any
-  // transcript.md as finished, the GUI stops offering to retry, and --all skips
-  // the folder, while the other speaker's half is simply missing.
-  const allOk = results.every((r) => r.ok);
-
-  const { text, count, suppressed } = buildTranscript(results, {
-    noBleedSuppression: opts.noBleedSuppression,
-    stripFillers: opts.stripFillers !== false,
-  });
-
-  if (!allOk && !count) {
-    throw new Error(
-      `Both workers failed and produced nothing. Audio kept. ` +
-        results.filter((r) => !r.ok).map((r) => `${r.speaker}: ${r.error ?? 'crashed'}`).join('; ')
-    );
-  }
-  if (suppressed.length) {
-    log(`   ${suppressed.length} echo line(s) suppressed - you were on speakers, not headphones`);
-  }
-  // A worker can exit cleanly having recognised nothing: silence, the wrong
-  // input device, a model that loaded but matched no speech. An empty
-  // transcript.md would mark the meeting done forever while library.js, which
-  // reads transcribed as Boolean(transcript), still calls it untranscribed, and
-  // the audio it would take to retry is deleted below. So write no transcript
-  // at all for an empty result.
-  const empty = count === 0;
-  const transcriptName = allOk ? 'transcript.md' : 'transcript.partial.md';
-  if (!empty) await fsp.writeFile(path.join(dir, transcriptName), text);
-
-  // Update the meeting record before deleting anything.
   const metaPath = path.join(dir, 'meeting.json');
   // The catch must cover the parse as well as the read. Attached to readFile
   // alone, a transient EBUSY (AV scanner, sync client) yields '{}' and the
@@ -417,22 +431,140 @@ export async function transcribeMeeting(dir, opts = {}) {
     }
     meta = {};
   }
-  const wallMs = Date.now() - t0;
-  const audioSeconds = meta.durationSeconds ?? 0;
 
+  /*
+   * Only the captures that still owe a transcript. A meeting stopped and
+   * resumed can have one part already transcribed live and another that was
+   * not, and re-running the finished one would burn minutes of CPU to produce
+   * lines that are already in the file.
+   */
+  const all = segmentsOf(meta);
+  const todo = pendingSegments(meta);
+  log(`\n> ${path.basename(dir)}${all.length > 1 ? `  (${todo.length} of ${all.length} parts)` : ''}`);
+
+  const ctx = { modelDir, vadModel, threads, quiet, log, opts };
+  const done = [];
+  let missing = 0;
+
+  for (const segment of todo) {
+    const out = await transcribeSegment(dir, segment, ctx);
+    if (!out) { missing++; continue; }
+    done.push({ segment, out });
+  }
+
+  if (!done.length) {
+    throw new Error(
+      missing || !todo.length
+        ? `No audio in ${dir}. Already transcribed, or the recording failed.`
+        : `Nothing to transcribe in ${dir}.`
+    );
+  }
+
+  const anyRecognised = done.some((d) => d.out.count > 0);
+  const everyWorkerOk = done.every((d) => d.out.allOk);
+  if (!everyWorkerOk && !anyRecognised) {
+    const why = done
+      .flatMap((d) => d.out.results.filter((r) => !r.ok))
+      .map((r) => `${r.speaker}: ${r.error ?? 'crashed'}`)
+      .join('; ');
+    throw new Error(`Every worker failed and produced nothing. Audio kept. ${why}`);
+  }
+
+  /*
+   * Merged into whatever is already in the file rather than written over it.
+   * transcript.md may already hold the lines of a part transcribed live, or of
+   * an earlier part of this same meeting, and overwriting would silently delete
+   * them. The merge is by timestamp and idempotent, so a re-run adds nothing
+   * rather than doubling the file.
+   */
+  const name = everyWorkerOk ? 'transcript.md' : 'transcript.partial.md';
+  if (anyRecognised) {
+    const file = path.join(dir, name);
+    const existing = await fsp.readFile(file, 'utf8').catch(() => '');
+    await fsp.writeFile(file, appendTranscript(existing, done.map((d) => d.out.text).join('')));
+  }
+
+  const wallMs = done.reduce((n, d) => n + d.out.wallMs, 0);
+  const count = done.reduce((n, d) => n + d.out.count, 0);
+  const suppressed = done.flatMap((d) => d.out.suppressed);
+  let deleted = 0;
+
+  for (const { segment, out } of done) {
+    // A worker can exit cleanly having recognised nothing: silence, the wrong
+    // input device, a model that loaded but matched no speech. That is not a
+    // success, and the audio it would take to retry has to be kept.
+    const good = out.allOk && out.count > 0;
+    segment.transcript = {
+      at: new Date().toISOString(),
+      engine: 'sherpa-onnx',
+      model: asrModel,
+      source: 'batch',
+      utterances: out.count,
+      complete: good,
+      // Keep the suppressed lines themselves, not just a tally. They cost a
+      // couple of hundred bytes, and without them a wrong suppression is
+      // unrecoverable once the audio is deleted below.
+      echoesSuppressed: { count: out.suppressed.length, segments: out.suppressed },
+      wallSeconds: +(out.wallMs / 1000).toFixed(1),
+      realtimeFactor: segment.durationSeconds
+        ? +(segment.durationSeconds / (out.wallMs / 1000)).toFixed(2)
+        : null,
+      perTrack: out.results.map((r) => ({
+        speaker: r.speaker,
+        ok: r.ok,
+        crashed: r.crashed,
+        error: r.error ?? null,
+        utterances: r.segments.length,
+        voicedSeconds: r.meta?.voicedSeconds ?? null,
+      })),
+      audio: null,
+    };
+
+    // Only discard audio when BOTH tracks succeeded AND something was
+    // recognised. A crashed worker or an empty result means there is nothing
+    // usable to keep, and the wavs are the only way to try again: the renderer
+    // freed its buffers at save time.
+    if (good && !keepAudio) {
+      for (const t of out.present) {
+        await fsp.rm(t.wav, { force: true });
+        deleted++;
+      }
+      segment.transcript.audio = 'deleted after successful transcription';
+    } else if (keepAudio) {
+      segment.transcript.audio = 'kept, --keep-audio';
+    } else if (!out.count) {
+      segment.transcript.audio = 'kept, nothing was recognised, so no transcript was written';
+    } else {
+      segment.transcript.audio = 'kept, a worker failed, so the transcript may be incomplete';
+    }
+  }
+
+  if (deleted) log(`   audio deleted (${deleted} files)`);
+  if (suppressed.length) {
+    log(`   ${suppressed.length} echo line(s) suppressed - you were on speakers, not headphones`);
+  }
+
+  // Schema 2 only once there is more than one capture. A meeting that was never
+  // resumed keeps exactly the file shape it has always had.
+  if (all.length > 1) {
+    meta.schema = 2;
+    meta.segments = all;
+  }
+  const audioSeconds = meta.durationSeconds ?? 0;
   meta.transcript = {
     at: new Date().toISOString(),
     engine: 'sherpa-onnx',
     model: asrModel,
     utterances: count,
-    // Keep the suppressed lines themselves, not just a tally. They cost a couple
-    // of hundred bytes, and without them a wrong suppression is unrecoverable
-    // once the audio is deleted a few lines below.
     echoesSuppressed: { count: suppressed.length, segments: suppressed },
     wallSeconds: +(wallMs / 1000).toFixed(1),
     realtimeFactor: audioSeconds ? +(audioSeconds / (wallMs / 1000)).toFixed(2) : null,
-    complete: allOk && !empty,
-    perTrack: results.map((r) => ({
+    // The MEETING is complete when no part of it is still owed a transcript,
+    // which is not the same as this run having gone well: another part may
+    // still be waiting for its audio.
+    complete: all.every((x) => x.transcript?.complete === true),
+    parts: all.length,
+    perTrack: done.flatMap((d) => d.out.results).map((r) => ({
       speaker: r.speaker,
       ok: r.ok,
       crashed: r.crashed,
@@ -441,38 +573,25 @@ export async function transcribeMeeting(dir, opts = {}) {
       voicedSeconds: r.meta?.voicedSeconds ?? null,
     })),
   };
-
-  // Only discard audio when BOTH tracks succeeded AND something was recognised.
-  // A crashed worker or an empty result means there is nothing usable to keep,
-  // and the wavs are the only way to try again: the renderer freed its buffers
-  // at save time.
-  if (allOk && !empty && !keepAudio) {
-    for (const t of present) await fsp.rm(t.wav, { force: true });
-    meta.audioDisposition = 'deleted after successful transcription';
-    log(`   audio deleted (${present.length} files)`);
-  } else if (keepAudio) {
-    meta.audioDisposition = 'kept, --keep-audio';
-    log('   audio KEPT, --keep-audio');
-  } else if (empty) {
-    meta.audioDisposition = 'kept, nothing was recognised, so no transcript was written';
-    log('   audio KEPT, nothing was recognised');
-  } else {
-    meta.audioDisposition = 'kept, a worker failed, so the transcript may be incomplete';
-    log('   audio KEPT, a worker failed');
-  }
+  meta.audioDisposition = deleted
+    ? 'deleted after successful transcription'
+    : keepAudio
+      ? 'kept, --keep-audio'
+      : 'kept, see each part for why';
 
   await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
 
   const rtf = meta.transcript.realtimeFactor;
   log(
-    `   → ${empty ? 'nothing recognised, no transcript written' : transcriptName} · ` +
-      `${count} utterances · ${(wallMs / 1000).toFixed(1)}s` +
+    `   -> ${anyRecognised ? name : 'nothing recognised, no transcript written'} - ` +
+      `${count} utterances - ${(wallMs / 1000).toFixed(1)}s` +
       (rtf ? ` (${rtf}x realtime)` : '')
   );
   // ok must not be true for a run that recognised nothing, or every caller
   // reports success over an empty result. `empty` says which of the two
   // failures it was, so the UI can tell the user the audio was kept.
-  const ok = allOk && !empty;
+  const empty = count === 0;
+  const ok = everyWorkerOk && !empty;
   return { dir, count, meta, ok, empty, audioKept: !(ok && !keepAudio) };
 }
 

@@ -101,6 +101,9 @@ async function main() {
     ["from '../app/library.js'", "from './library.js'"],
   ]);
   await copyRewritten(path.join(ROOT, 'app', 'library.js'), path.join(serverDir, 'library.js'));
+  // library.js imports it, so the bundle is broken without it. It is pure and
+  // import-free, which is why copying it is enough.
+  await copyRewritten(path.join(ROOT, 'app', 'meeting-schema.js'), path.join(serverDir, 'meeting-schema.js'));
 
   // Resolve the real dependency closure with npm rather than hand-copying the
   // top-level packages. The SDK pulls in seventeen transitive dependencies, and a

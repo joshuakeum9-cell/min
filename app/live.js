@@ -129,6 +129,8 @@ function frame(track, samples) {
  * @param {number}  [opts.readyTimeoutMs] how long to wait for the model load, default 120 s
  * @param {number}  [opts.maxRestarts]    respawns allowed after a mid-recording crash, default 2
  * @param {boolean} [opts.stripFillers]   drop standalone uh/um/hm from each line, default false
+ * @param {number}  [opts.startOffsetSamples] where this capture sits on the meeting clock,
+ *                                        in samples at 16 kHz. Non-zero when resuming.
  */
 export function createLiveSession(opts = {}) {
   const {
@@ -146,13 +148,24 @@ export function createLiveSession(opts = {}) {
     readyTimeoutMs = 120_000,
     maxRestarts = 2,
     stripFillers = false,
+    startOffsetSamples = 0,
   } = opts;
 
   const segments = [];
   const queue = []; // { buf, track, n, resolve }, frames not yet written to a worker
-  // Samples handed to a worker so far. A respawned worker starts its clock here,
-  // so its t0/t1 stay on the recording's timeline rather than restarting at zero.
-  const written = { you: 0, them: 0 };
+  /*
+   * Samples handed to a worker so far. The worker is told this on spawn and
+   * dates every segment from it, so a respawned worker keeps its t0/t1 on the
+   * recording's timeline rather than restarting at zero.
+   *
+   * Seeded rather than started at zero, so a Resume puts its lines where they
+   * belong on the MEETING's clock rather than at the start of its own segment.
+   * The crash path inherits it for free: a respawn reads this same counter.
+   */
+  const seed = Number.isFinite(startOffsetSamples) && startOffsetSamples > 0
+    ? Math.round(startOffsetSamples)
+    : 0;
+  const written = { you: seed, them: seed };
 
   let models = null;
   let child = null;

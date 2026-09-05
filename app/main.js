@@ -21,6 +21,9 @@ import { fileURLToPath } from 'node:url';
 
 import { createSettings } from './settings.js';
 import { createCalendarStore } from './calendar-store.js';
+import {
+  nextSegment, withSegment, segmentsOf, appendTranscript, offsetSamples,
+} from './meeting-schema.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
@@ -246,8 +249,66 @@ async function uniqueDir(base) {
 
 /* --------------------------------------------------------------------- ipc */
 
+/**
+ * meeting.json, read for a write-back.
+ *
+ * The catch must cover the parse as well as the read: attached to readFile
+ * alone, a transient EBUSY from an antivirus scanner or a sync client yields
+ * '{}' and the write-back then silently destroys the title, the timings and the
+ * track integrity of every earlier segment. Same rule transcribe.js follows.
+ */
+async function readMeta(dir) {
+  try {
+    return JSON.parse(await fsp.readFile(path.join(dir, 'meeting.json'), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw new Error(`Could not read meeting.json (${err.message}). Refusing to overwrite it.`);
+  }
+}
+
 ipcMain.handle('save-meeting', async (_evt, payload) => {
-  const { startedAt, endedAt, title, notes, sampleRate, mic, system, timeline, calendarEvent } = payload;
+  const { dir: into, startedAt, endedAt, title, notes, sampleRate, mic, system, timeline, calendarEvent } = payload;
+
+  const micF32 = new Float32Array(mic.buffer, mic.byteOffset, mic.byteLength / 4);
+  const sysF32 = new Float32Array(system.buffer, system.byteOffset, system.byteLength / 4);
+  const durationSeconds = (endedAt - startedAt) / 1000;
+  const tracksOf = () => ({
+    mic: trackMeta(micF32, sampleRate, durationSeconds),
+    system: trackMeta(sysF32, sampleRate, durationSeconds),
+  });
+
+  /*
+   * Resume. The note already exists on disk, so this capture becomes another
+   * segment of it rather than a second folder. Everything about the meeting
+   * except the new audio is recomputed by withSegment from the segments
+   * themselves, so nothing here needs to know how to add up a meeting.
+   */
+  if (into) {
+    const target = confine(into);
+    const meta = await readMeta(target);
+    if (!meta) throw new Error('That meeting folder has no meeting.json, so there is nothing to resume.');
+
+    // The folder listing, not the metadata, decides which names are free. A run
+    // that died between writing mic-2.wav and writing meeting.json leaves a file
+    // the metadata does not mention, and reusing that name would lose its audio.
+    const existing = await fsp.readdir(target).catch(() => []);
+    const segment = nextSegment(meta, {
+      startedAt, endedAt, durationSeconds, existing, tracks: tracksOf(), timeline,
+    });
+
+    await Promise.all([
+      fsp.writeFile(path.join(target, segment.files.mic), encodeWav(micF32, sampleRate)),
+      fsp.writeFile(path.join(target, segment.files.system), encodeWav(sysF32, sampleRate)),
+      fsp.writeFile(path.join(target, 'my-notes.md'), (notes ?? '').trimEnd() + '\n'),
+    ]);
+
+    const next = withSegment(meta, segment);
+    // A title typed during the second half of a meeting is still the title.
+    if (title) next.title = title;
+    await fsp.writeFile(path.join(target, 'meeting.json'), JSON.stringify(next, null, 2) + '\n');
+    await reindexSoon();
+    return { dir: target, meta: next, segment };
+  }
 
   // Built from a slug here rather than taken from the renderer, but it goes
   // through the same gate, and the gate runs before anything is created so no
@@ -258,16 +319,18 @@ ipcMain.handle('save-meeting', async (_evt, payload) => {
   await fsp.mkdir(MEETINGS_DIR, { recursive: true });
   const dir = await uniqueDir(base);
 
-  const micF32 = new Float32Array(mic.buffer, mic.byteOffset, mic.byteLength / 4);
-  const sysF32 = new Float32Array(system.buffer, system.byteOffset, system.byteLength / 4);
-
   await Promise.all([
     fsp.writeFile(path.join(dir, 'mic.wav'), encodeWav(micF32, sampleRate)),
     fsp.writeFile(path.join(dir, 'system.wav'), encodeWav(sysF32, sampleRate)),
     fsp.writeFile(path.join(dir, 'my-notes.md'), (notes ?? '').trimEnd() + '\n'),
   ]);
 
-  const durationSeconds = (endedAt - startedAt) / 1000;
+  /*
+   * Still schema 1. A meeting that is never resumed is written exactly as it
+   * always was, and meeting-schema.js reads it AS a one-segment meeting, so no
+   * folder on disk is ever migrated. Schema 2 appears the first time someone
+   * presses Resume, and only in that folder.
+   */
   const meta = {
     schema: 1,
     title: title || 'Untitled',
@@ -275,10 +338,7 @@ ipcMain.handle('save-meeting', async (_evt, payload) => {
     endedAt: new Date(endedAt).toISOString(),
     durationSeconds: +durationSeconds.toFixed(2),
     sampleRate,
-    tracks: {
-      mic: trackMeta(micF32, sampleRate, durationSeconds),
-      system: trackMeta(sysF32, sampleRate, durationSeconds),
-    },
+    tracks: tracksOf(),
     timeline,
     // The calendar occurrence this recording was auto-titled from, when there
     // was one. library.js reads the attendee list back out of here for the
@@ -289,7 +349,7 @@ ipcMain.handle('save-meeting', async (_evt, payload) => {
   };
 
   await fsp.writeFile(path.join(dir, 'meeting.json'), JSON.stringify(meta, null, 2) + '\n');
-  return { dir, meta };
+  return { dir, meta, segment: segmentsOf(meta)[0] ?? null };
 });
 
 /**
@@ -857,6 +917,10 @@ ipcMain.handle('live-start', async (_evt, opts) => {
       // Read once, at the start of the recording. Changing the setting mid-call
       // would make the first half of the transcript disagree with the second.
       stripFillers: settings.get('stripFillers') !== false,
+      // Where this capture sits on the meeting's clock. Zero for a first
+      // recording; on a Resume it is the wall gap since the meeting began, so
+      // the new lines land after the old ones instead of on top of them.
+      startOffsetSamples: offsetSamples(Number(opts?.offsetSeconds) || 0),
       onSegment: (seg) => win?.webContents.send('live-segment', seg),
       onEcho: (seg) => win?.webContents.send('live-segment', { ...seg, echo: true }),
       onReady: () => win?.webContents.send('live-status', { state: 'ready' }),
@@ -891,7 +955,7 @@ ipcMain.on('live-push', (_evt, track, buf) => {
  * call. Reuses buildTranscript so the file is byte-identical in format to the
  * post-recording path, which is what md.js and the MCP server parse.
  */
-ipcMain.handle('live-stop', async (_evt, dir) => {
+ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
   if (!live) return { ok: false, count: 0 };
   const session = live;
   live = null;
@@ -903,27 +967,36 @@ ipcMain.handle('live-stop', async (_evt, dir) => {
     const target = confine(dir);
     const { toTranscriptResults } = await import('./live.js');
     const { buildTranscript } = await import('./transcribe.js');
-    const built = buildTranscript(toTranscriptResults(segments));
+    // No shifting here. The session was seeded with this segment's offset, so
+    // its timestamps are already on the meeting's clock rather than its own.
+    const built = buildTranscript(toTranscriptResults(segments), {
+      stripFillers: settings.get('stripFillers') !== false,
+    });
 
     // Same rule as the post-recording path: an empty result is not a success,
     // so no transcript.md is written and the audio is kept for another try.
     if (!built.count) return { ok: false, empty: true, count: 0, segments };
 
-    await fsp.writeFile(path.join(target, 'transcript.md'), built.text);
     const metaPath = path.join(target, 'meeting.json');
-    let meta;
-    try {
-      meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
-    } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
-      meta = {};
-    }
+    const meta = (await readMeta(target)) ?? {};
+
+    /*
+     * Appended, never overwritten. This is the second or third Stop of one
+     * meeting, and the lines from the earlier segments are already in the file;
+     * writing over it would throw away the first half of the meeting. The merge
+     * is by timestamp and idempotent, so a retry is a no-op rather than a
+     * doubled transcript.
+     */
+    const file = path.join(target, 'transcript.md');
+    const existing = await fsp.readFile(file, 'utf8').catch(() => '');
+    await fsp.writeFile(file, appendTranscript(existing, built.text));
+
     // A live worker that crashed and respawned leaves a hole: the audio that
     // played while it was restarting was never transcribed. session.stop()
     // already tells the two apart (complete is ok with no restarts), and that
     // difference decides whether the wavs may be deleted below.
     const complete = result?.complete === true;
-    meta.transcript = {
+    const record = {
       at: new Date().toISOString(),
       count: built.count,
       utterances: built.count,
@@ -937,24 +1010,47 @@ ipcMain.handle('live-stop', async (_evt, dir) => {
       title: liveMeta?.title ?? '',
     };
 
-    // Gated exactly like the post-recording pass: the worker finished cleanly
-    // AND something was recognised. Without this the wavs of a live-transcribed
-    // meeting are never deleted by anything, because the post-pass skips a
-    // meeting that already has a transcript.md. That is roughly 230 MB an hour,
-    // kept forever, for recordings that are already fully transcribed.
+    /*
+     * Which audio to delete. With segments this must be the files of the
+     * segment that was just captured, not mic.wav and system.wav: on a Resume
+     * those two belong to the FIRST segment, whose transcript this run knows
+     * nothing about, and deleting them would destroy the only copy of the first
+     * half of the meeting.
+     */
+    const all = segmentsOf(meta);
+    const here = all.find((x) => x.index === segmentIndex) ?? all[all.length - 1] ?? null;
+    const files = here?.files ?? { mic: 'mic.wav', system: 'system.wav' };
+
+    if (here) {
+      here.transcript = record;
+      // Kept at the top level as well: library.js, md.js, prompt.js and the MCP
+      // server all read meta.transcript, and none of them know about segments.
+      // It describes the meeting's transcript.md, which is now every segment.
+      meta.segments = all;
+    }
+    meta.transcript = {
+      ...record,
+      count: all.reduce((n, x) => n + (x.transcript?.count ?? 0), 0) || built.count,
+      complete: all.every((x) => x.transcript?.complete !== false) && complete,
+      segments: all.length,
+    };
+
     let deleted = 0;
     if (complete && built.count) {
-      for (const name of ['mic.wav', 'system.wav']) {
+      for (const name of [files.mic, files.system]) {
         try {
           await fsp.rm(path.join(target, name), { force: true });
           deleted++;
         } catch { /* a locked file is not worth failing the transcript over */ }
       }
+      if (here) here.audio = 'deleted after a complete live transcript';
       meta.audioDisposition = 'deleted after a complete live transcript';
     } else {
-      meta.audioDisposition = complete
+      const why = complete
         ? 'kept, nothing was recognised live'
         : 'kept, the live worker restarted, so the transcript may have a gap';
+      if (here) here.audio = why;
+      meta.audioDisposition = why;
     }
 
     await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
