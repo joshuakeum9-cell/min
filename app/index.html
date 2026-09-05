@@ -454,21 +454,71 @@
   .doc hr { border:none; border-top:1px solid var(--hairline); margin:20px 0; }
 
   /* ------------------------------------------------------------- transcript */
+  /*
+   * The transcript card, docked above the bottom bar rather than floating over
+   * the note. Granola's is an overlay; an overlay was tried here and collided
+   * with the window chrome at narrow widths, so this one is a sibling of the
+   * column and the bar, and reflows with them. Turning it into a true overlay
+   * is `position:absolute` plus an inset on this rule, nothing else.
+   *
+   * A viewport cap as well as a percentage: on a tall monitor 46% of the window
+   * is a wall of bubbles, and the note is what the user is meant to be typing in.
+   */
   #transcriptPanel {
-    flex:none; display:flex; flex-direction:column; max-height:46%; min-height:160px;
-    margin-bottom:12px; overflow:hidden;
+    flex:none; display:flex; justify-content:center;
+    max-height:min(46vh, 420px); min-height:160px;
+    padding:0 var(--gutter) 12px; overflow:hidden;
+  }
+  .panelInner {
+    flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;
+    /* Exactly as wide as the text you type, so the card reads as belonging to
+       the column above it rather than as a second, wider surface. */
+    max-width:var(--col);
+    background:var(--surface-raised); border:1px solid var(--hairline);
+    border-radius:var(--r-card);
   }
   .panelHead {
     flex:none; display:flex; align-items:center; gap:8px; height:40px;
-    padding:0 12px; border-bottom:1px solid var(--hairline);
+    padding:0 8px 0 12px; border-bottom:1px solid var(--hairline);
   }
-  .panelHead .panelTitle { font:600 var(--fs-sm)/var(--lh-ctl) var(--sans); color:var(--ink); }
+  .panelHead .panelTitle { flex:none; font:600 var(--fs-sm)/var(--lh-ctl) var(--sans); color:var(--ink); }
+  /*
+   * The search box takes the slack so the buttons stay put as the card widens,
+   * and it is capped so it never becomes the widest thing in a narrow window.
+   */
+  #transcriptSearch {
+    flex:1; min-width:0; max-width:260px; height:26px; padding:0 8px;
+    border:1px solid transparent; border-radius:var(--r-pill);
+    background:var(--surface-sunken); color:var(--ink); outline:none;
+    font:400 var(--fs-sm)/var(--lh-ctl) var(--sans);
+  }
+  #transcriptSearch:focus { border-color:var(--hairline); background:var(--surface-raised); }
+  #transcriptSearch::placeholder { color:var(--ink-3); }
+  #transcriptCount {
+    flex:none; font:400 var(--fs-xs)/var(--lh-ctl) var(--mono); color:var(--ink-3);
+    white-space:nowrap; font-variant-numeric:tabular-nums;
+  }
+  #closeTranscript { flex:none; width:26px; padding:0; display:grid; place-items:center; }
+  /* A copied bubble flashes rather than announcing itself in the status line:
+     the click and the feedback are in the same place. */
+  .bubble.copied { outline:2px solid var(--accent-soft); outline-offset:1px; }
+  .bubble mark { background:var(--accent-soft); color:inherit; border-radius:3px; padding:0 1px; }
+  /*
+   * The footer carries the one control that matters while a meeting runs, and
+   * the consent line. It is not legal advice and does not pretend to be: it is
+   * there because a tool that records other people should say so where the
+   * recording is visible, not only in a settings page nobody opens.
+   */
+  .panelFoot {
+    flex:none; display:flex; align-items:center; gap:10px;
+    padding:8px 12px; border-top:1px solid var(--hairline);
+  }
+  .panelFoot .consent { font:400 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--ink-3); }
   .liveDot {
     display:none; width:7px; height:7px; border-radius:var(--r-pill); background:var(--danger);
     animation:pulse 1.3s ease-in-out infinite;
   }
   #transcriptPanel.recording .liveDot { display:inline-block; }
-  .panelHead #copyTranscript { margin-left:auto; }
 
   /*
    * Bubbles. The rule comes from Granola's own documentation of its transcript:
@@ -745,15 +795,34 @@
 
         <section id="writeUp" class="doc hide"></section>
 
-        <aside id="transcriptPanel" class="card hide">
+      </div>
+
+      <!--
+        Docked between the note column and the bottom bar, not inside the
+        column: it must stay put while the notes scroll under it, and the pill
+        in the bar below is what opens and closes it.
+      -->
+      <aside id="transcriptPanel" class="hide">
+        <div class="panelInner">
           <div class="panelHead">
             <span class="panelTitle">Transcript</span>
             <span class="liveDot" aria-hidden="true"></span>
-            <button id="copyTranscript" class="btn ghost sm">Copy</button>
+            <input id="transcriptSearch" type="search" placeholder="Search this transcript"
+                   autocomplete="off" spellcheck="false" aria-label="Search this transcript">
+            <span id="transcriptCount" aria-live="polite"></span>
+            <button id="copyTranscript" type="button" class="btn ghost sm">Copy</button>
+            <button id="closeTranscript" type="button" class="btn ghost sm"
+                    title="Hide the transcript" aria-label="Hide the transcript">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </button>
           </div>
           <div id="bubbles"></div>
-        </aside>
-      </div>
+          <div class="panelFoot">
+            <button id="transcriptToggle" type="button" class="btn sm">Stop</button>
+            <span class="consent">Always get consent when transcribing others.</span>
+          </div>
+        </div>
+      </aside>
 
       <div id="noteBar" class="bar">
         <div class="barInner">

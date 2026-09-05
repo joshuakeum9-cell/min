@@ -17,7 +17,9 @@
  * post-stop transcribe path still exists.
  */
 import { renderMarkdown } from './md.js';
-import { renderBubbles, appendBubble, segmentsFromTranscript } from './conversation.js';
+import {
+  renderBubbles, appendBubble, segmentsFromTranscript, enableBubbleCopy, filterBubbles,
+} from './conversation.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -183,6 +185,19 @@ function initMicPill() {
  * of their own. Several paths open that panel (a live session starting, a
  * saved transcript loading, the pill itself) and all of them must agree.
  */
+/**
+ * Drop any active search. Called whenever the bubbles are replaced: a filter
+ * left over from the previous note would silently hide most of the new one, and
+ * the user has no reason to connect the empty card to a box they typed in
+ * minutes ago.
+ */
+function clearTranscriptSearch() {
+  const search = $('transcriptSearch');
+  if (search) search.value = '';
+  const count = $('transcriptCount');
+  if (count) count.textContent = '';
+}
+
 function syncPill() {
   const pill = $('micPill');
   const panel = $('transcriptPanel');
@@ -215,10 +230,21 @@ function paintPill(silent = false) {
  * every part of it optional: the bridge method may not exist and the channel
  * may be dead, and neither is allowed to reach the recording.
  */
+/**
+ * Seconds of audio actually captured. The floating window shows this rather
+ * than counting for itself, because it is destroyed and rebuilt with the
+ * recording and a window that restarted its own clock would disagree with the
+ * note it belongs to.
+ */
+function capturedSeconds() {
+  return recording && startedAt ? (Date.now() - startedAt) / 1000 : 0;
+}
+
 function pushRecordingState() {
   try {
     api?.recordingState?.({
       recording,
+      elapsed: capturedSeconds(),
       you: T.mic.level, them: T.sys.level,
       title: $('noteTitle')?.value.trim() ?? '',
     });
@@ -447,7 +473,7 @@ async function start() {
   stateTimer = setInterval(pushRecordingState, Math.round(1000 / STATE_FPS));
 
   tick = setInterval(() => {
-    const s = Math.floor((Date.now() - startedAt) / 1000);
+    const s = Math.floor(capturedSeconds());
     const clock = $('clock');
     if (clock) clock.textContent =
       `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -483,6 +509,7 @@ async function startLive() {
     live = { active: true, frames: newLiveFrames() };
     $('transcriptPanel')?.classList.remove('hide');
     syncPill();
+    clearTranscriptSearch();
     renderBubbles($('bubbles'), [], { live: true });
   } catch (e) {
     setStatus('Live transcript unavailable (' + e.message + '). Recording continues; transcribe after.', 'warn');
@@ -637,6 +664,7 @@ async function finishLive(saved) {
     setStatus(`Saved with a live transcript of ${n} lines.`, 'good');
   } else if (result?.segments?.length) {
     currentSegments = result.segments.filter((s) => !s.echo);
+    clearTranscriptSearch();
     renderBubbles($('bubbles'), currentSegments, { live: false });
     setStatus('Saved. The live transcript was not written to disk; Write up will transcribe from the audio.', 'warn');
   } else {
@@ -660,6 +688,14 @@ function setRecLabel(text) {
     rec.prepend(label);
   }
   label.textContent = text;
+  // The card's footer button is the same control in a second place. Driven from
+  // here rather than from each caller, so the two can never disagree about
+  // whether this meeting is running.
+  const foot = $('transcriptToggle');
+  if (foot) {
+    foot.textContent = text;
+    foot.title = text === 'Stop' ? 'Stop capturing' : 'Start capturing into this note';
+  }
 }
 
 const fmtTime = (iso) => {
@@ -739,6 +775,7 @@ function showTranscript(m) {
   const box = $('bubbles');
   if (m?.transcript) {
     currentSegments = segmentsFromTranscript(m.transcript);
+    clearTranscriptSearch();
     renderBubbles(box, currentSegments, { live: false });
     panel?.classList.remove('hide');
   } else if (!recording) {
@@ -943,6 +980,29 @@ export function initNote({ api: bridge, onStatus } = {}) {
     $('transcriptPanel')?.classList.toggle('hide');
     syncPill();
   });
+  $('closeTranscript')?.addEventListener('click', () => {
+    $('transcriptPanel')?.classList.add('hide');
+    syncPill();
+  });
+  // The footer button and the bar button are the same control. One handler.
+  $('transcriptToggle')?.addEventListener('click', () => (recording ? stopRec() : start()));
+
+  // Click a line to copy it, in the transcript's own format. Delegated inside
+  // conversation.js, so it keeps working as bubbles stream in mid-recording.
+  const bubbles = $('bubbles');
+  if (bubbles) {
+    enableBubbleCopy(bubbles, () => setStatus('Line copied.', 'good'));
+    const search = $('transcriptSearch');
+    const count = $('transcriptCount');
+    search?.addEventListener('input', () => {
+      const q = search.value;
+      const n = filterBubbles(bubbles, q);
+      // Silent when the box is empty: a count beside an empty search box is
+      // noise, and the number it would show is just "all of them".
+      const total = bubbles.querySelectorAll('.bubble').length;
+      if (count) count.textContent = q.trim() ? `${n} of ${total}` : '';
+    });
+  }
   $('copyTranscript')?.addEventListener('click', async () => {
     const text = transcriptText();
     if (!text) return setStatus('Nothing in the transcript yet.', 'warn');
