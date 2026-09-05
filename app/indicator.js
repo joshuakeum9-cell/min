@@ -23,10 +23,18 @@ const bars = [...document.querySelectorAll('.wave i')];
 // transcript bubbles, so the pill says who is talking without any labels.
 const MIX = [1, 0.65, 0.35, 0];
 
+// How long the nub waits for a state push before falling back to a canned
+// animation. record.js pushes twelve a second for as long as it is recording,
+// so half a second of nothing is a stalled worklet or a wedged note window, not
+// a quiet room. Same 500 ms the in-note #micPill uses, so the two meters give
+// up at the same moment and never disagree about whether audio is flowing.
+const STATE_STALE_MS = 500;
+
 let recording = false;  // capturing audio: bars green and dancing
 let you = 0, them = 0;  // 0..1 levels from the last push
 let seconds = 0;        // what the clock shows
 let localOrigin = 0;    // epoch ms we count from when main sends no duration
+let lastStateAt = 0;    // epoch ms of the last push, for the stall fallback
 
 function clamp(n) {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0;
@@ -41,9 +49,17 @@ function formatClock(total) {
   return h ? `${h}:${two(m)}:${two(s % 60)}` : `${two(m)}:${two(s % 60)}`;
 }
 
-// Main may or may not say how long the meeting has run. Prefer whatever it
-// sends; null means nothing was sent and we have to count for ourselves, so
-// the clock is never stuck at 00:00.
+// How long the meeting has run. `elapsed` is read first because main is the
+// side expected to supply it: it owns the session, so its number is the one
+// that stays right across a nub reload or a nub opened mid-recording.
+//
+// Everything after it is a fallback, and is deliberately kept rather than
+// tidied away. main.js cleanRecordingState passes `elapsed` through, but it
+// sends null whenever the renderer's value is not a finite number, and the
+// renderer only has one at all while it is capturing. Without the fallback
+// those cases would leave the nub reading 00:00 through a real recording,
+// which is a worse lie than a clock that counts for itself. null means nothing
+// usable arrived and apply() has to anchor its own origin.
 function elapsedFrom(state) {
   if (Number.isFinite(state.elapsed)) return state.elapsed;
   if (Number.isFinite(state.seconds)) return state.seconds;
@@ -61,9 +77,18 @@ function paint() {
   }
   clock.textContent = formatClock(seconds);
   document.body.classList.toggle('rec', recording);
+  // Real pushes always win. apply() re-dates lastStateAt before it calls here,
+  // so the class is off again on the very first push after a stall. Only ever
+  // set while recording: an idle pill is meant to sit still.
+  document.body.classList.toggle(
+    'hum', recording && Date.now() - lastStateAt > STATE_STALE_MS);
 }
 
 function apply(payload) {
+  // Proof the note window is still talking to us, which is what keeps the bars
+  // off the fallback animation. A push carrying silence still counts as proof.
+  lastStateAt = Date.now();
+
   const state = payload && typeof payload === 'object' ? payload : {};
   recording = Boolean(state.recording);
   you = clamp(state.you);
@@ -90,11 +115,17 @@ function apply(payload) {
 }
 
 // Levels arrive many times a second, but a state push is not guaranteed while
-// the room is silent, so the clock gets its own tick.
+// the room is silent, so the clock gets its own tick. This tick is also what
+// notices that pushes have stopped, which is why it now runs at 250 ms rather
+// than 500: sampling a 500 ms staleness window every 500 ms means a stall that
+// begins just after a tick goes unnoticed for a full second, and a second of
+// four frozen bars on the one window the user can see is exactly what the
+// fallback exists to prevent. At 250 ms the worst case is 750 ms, and the work
+// per tick is four CSS variables and a class toggle.
 setInterval(() => {
   if (localOrigin && recording) seconds = (Date.now() - localOrigin) / 1000;
   paint();
-}, 500);
+}, 250);
 
 /* ------------------------------------------------------------------- drag */
 

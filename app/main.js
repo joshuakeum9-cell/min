@@ -562,7 +562,7 @@ let indicatorMoveTimer = null;
 // The last state the renderer reported, kept so a nub created part-way through
 // a recording, or one whose page finishes loading a beat later, has something to
 // draw before the next tick arrives.
-let recordingState = { recording: false, you: 0, them: 0, title: '' };
+let recordingState = { recording: false, elapsed: 0, you: 0, them: 0, title: '' };
 
 /**
  * Everything here crosses from the renderer, so nothing is trusted: levels are
@@ -575,6 +575,11 @@ function cleanRecordingState(payload) {
   const level = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
   return {
     recording: Boolean(p.recording),
+    // Captured seconds, sent by the renderer so there is ONE clock. The nub can
+    // count for itself if this never arrives, but it is recreated whenever the
+    // recording state turns on, and a window that starts counting at zero on
+    // every recreation would disagree with the note it belongs to.
+    elapsed: Number.isFinite(p.elapsed) && p.elapsed >= 0 ? p.elapsed : null,
     you: level(p.you),
     them: level(p.them),
     title: typeof p.title === 'string' ? p.title.slice(0, 120) : '',
