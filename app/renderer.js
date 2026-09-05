@@ -14,7 +14,7 @@
  * Loaded as a module, so it is deferred and the DOM is parsed before it runs.
  */
 import { initHome, refreshHome } from './home.js';
-import { initNote, openMeeting, newNote, isRecording } from './record.js';
+import { initNote, openMeeting, newNote, isRecording, startRecording } from './record.js';
 import { initSettings } from './settings-view.js';
 
 const api = window.api;
@@ -192,6 +192,21 @@ async function boot() {
   wire('home', () => initHome({ api, navigate, onStatus: setStatus, settings }));
   wire('note', () => initNote({ api, onStatus: setStatus }));
   wire('settings', () => initSettings({ api }));
+
+  /*
+   * "Take notes" on a meeting prompt: open a note for that meeting and start.
+   * Wired here rather than in home.js because it must work from any view, and
+   * the router is the only thing that can move between them.
+   */
+  api?.onMeetingAlertTake?.((ev) => {
+    if (!ev) return;
+    if (isRecording()) {
+      setStatus('Already recording. Press Stop before starting that meeting.', 'warn');
+      return;
+    }
+    navigate('note', { prefill: { calendarEvent: ev, title: ev.title } });
+    if (!startRecording()) setStatus('Could not start recording that meeting.', 'warn');
+  });
 
   navigate('home');
 }

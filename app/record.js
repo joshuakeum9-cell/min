@@ -1230,6 +1230,20 @@ export function newNote(prefill) {
   return true;
 }
 
+/**
+ * Start recording the note that is already open. The meeting prompt uses this:
+ * it has just opened a note for the meeting, and pressing "Take notes" means
+ * record it, so the alternative would be synthesising a click on #recBtn.
+ *
+ * Returns false when a recording is already running, which the caller reports;
+ * silently starting a second one is how you lose the first.
+ */
+export function startRecording() {
+  if (recording || starting) return false;
+  start();
+  return true;
+}
+
 export function isRecording() {
   return recording || starting;
 }

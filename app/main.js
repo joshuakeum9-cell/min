@@ -28,6 +28,7 @@ import { createCalendarStore } from './calendar-store.js';
 import {
   nextSegment, withSegment, segmentsOf, appendTranscript, offsetSamples,
 } from './meeting-schema.js';
+import { pendingAlert, nextWakeMs, alertKey } from './meeting-alerts.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
@@ -936,12 +937,176 @@ ipcMain.on('indicator-move', (evt, x, y) => {
 const calendar = createCalendarStore({
   settings,
   cachePath: path.join(app.getPath('userData'), 'calendar-cache.json'),
-  onUpdated: (summary) => win?.webContents.send('calendar-updated', summary),
+  onUpdated: (summary) => {
+    win?.webContents.send('calendar-updated', summary);
+    /*
+     * Look again straight away rather than waiting out the current sleep.
+     * Measured: without this the first check runs before the cache has loaded,
+     * finds nothing, and schedules itself a full minute out, so a meeting
+     * starting in the next sixty seconds got its prompt sixty seconds late.
+     * The calendar changing is exactly when the answer changes.
+     */
+    checkAlerts();
+  },
 });
 
 ipcMain.handle('calendar-refresh', () => calendar.refresh());
 ipcMain.handle('calendar-upcoming', (_evt, opts) => calendar.upcoming(opts?.days ?? 7));
 ipcMain.handle('calendar-event-now', () => calendar.eventNow());
+
+/* ----------------------------------------------------------- meeting alert */
+
+/*
+ * The prompt that appears shortly before a calendar meeting, offering to take
+ * notes on it.
+ *
+ * This is the other half of the calendar model. "+ New note" is deliberately
+ * impromptu and adopts no meeting, and a Coming up row has to be found and
+ * clicked, so without this there is nothing that reaches the user when a
+ * meeting they meant to record is actually starting.
+ */
+const NOTIFY_WIDTH = 320;
+const NOTIFY_HEIGHT = 118;
+const NOTIFY_MARGIN = 16;
+// Long enough to notice on the way back from a coffee, short enough that a
+// meeting you ignored stops nagging.
+const NOTIFY_LINGER_MS = 3 * 60 * 1000;
+
+let notifyWin = null;
+let notifyReady = false;
+let notifyEvent = null;      // the occurrence currently on screen
+let notifyTimer = null;      // the next poll
+let notifyLinger = null;     // the auto-dismiss
+// Occurrences already offered. Kept for the life of the process: a prompt the
+// user dismissed must not come back a minute later, and a restart is a
+// reasonable place to forget.
+const alertedKeys = new Set();
+
+function createNotify() {
+  if (notifyWin && !notifyWin.isDestroyed()) return notifyWin;
+
+  const area = screen.getPrimaryDisplay().workArea;
+  notifyReady = false;
+  notifyWin = new BrowserWindow({
+    x: area.x + area.width - NOTIFY_WIDTH - NOTIFY_MARGIN,
+    y: area.y + NOTIFY_MARGIN,
+    width: NOTIFY_WIDTH,
+    height: NOTIFY_HEIGHT,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    skipTaskbar: true,
+    /*
+     * Same reasoning as the floating indicator, and it matters more here: this
+     * window appears WHILE a meeting is starting, which is the worst possible
+     * moment to pull focus off a call. Measured on Windows: a focusable:false
+     * window still receives mousedown and click, so its buttons work; it simply
+     * cannot become foreground. The cost is that key events never reach it, so
+     * the dismiss X is the only way out rather than Escape.
+     */
+    focusable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(HERE, 'notify-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  notifyWin.setAlwaysOnTop(true, 'screen-saver');
+  notifyWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  notifyWin.on('closed', () => { notifyWin = null; notifyReady = false; });
+  notifyWin.webContents.on('did-finish-load', () => {
+    notifyReady = true;
+    sendNotifyMeeting();
+    notifyWin?.showInactive();
+  });
+  externalOnly(notifyWin.webContents);
+  notifyWin.loadFile(path.join(HERE, 'notify.html'));
+  return notifyWin;
+}
+
+function sendNotifyMeeting() {
+  if (!notifyWin || notifyWin.isDestroyed() || !notifyReady || !notifyEvent) return;
+  const startMs = Date.parse(notifyEvent.start);
+  notifyWin.webContents.send('notify-meeting', {
+    title: String(notifyEvent.title ?? '').slice(0, 200),
+    start: notifyEvent.start ?? null,
+    end: notifyEvent.end ?? null,
+    startsInMs: Number.isFinite(startMs) ? startMs - Date.now() : 0,
+  });
+}
+
+function closeNotify() {
+  if (notifyLinger) { clearTimeout(notifyLinger); notifyLinger = null; }
+  notifyEvent = null;
+  if (notifyWin && !notifyWin.isDestroyed()) notifyWin.destroy();
+  notifyWin = null;
+  notifyReady = false;
+}
+
+/** Every event the store knows about in the next couple of days, flattened. */
+function alertCandidates() {
+  const flat = [];
+  try {
+    for (const group of calendar.upcoming(2) ?? []) {
+      for (const ev of group.events ?? []) flat.push(ev);
+    }
+  } catch { /* the calendar is a convenience; never let it break the app */ }
+  return flat;
+}
+
+/*
+ * One poll, rescheduling itself. A self-rescheduling timeout rather than a
+ * fixed interval because nextWakeMs knows when there is nothing to look at:
+ * an empty calendar checks once a minute, and a meeting three minutes out is
+ * looked at again when it is nearly due.
+ */
+function checkAlerts() {
+  if (notifyTimer) { clearTimeout(notifyTimer); notifyTimer = null; }
+
+  const on = settings.get('meetingAlerts') !== false;
+  const events = on ? alertCandidates() : [];
+
+  if (on && !notifyEvent) {
+    const due = pendingAlert(events, Date.now(), { alerted: alertedKeys });
+    if (due?.event) {
+      notifyEvent = due.event;
+      alertedKeys.add(alertKey(due.event));
+      createNotify();
+      sendNotifyMeeting();
+      notifyLinger = setTimeout(closeNotify, NOTIFY_LINGER_MS);
+      notifyLinger.unref?.();
+    }
+  }
+
+  const wait = on ? nextWakeMs(events, Date.now()) : 60_000;
+  notifyTimer = setTimeout(checkAlerts, wait);
+  notifyTimer.unref?.();
+}
+
+/**
+ * 'take' opens the note for this meeting in the main window and starts
+ * recording it; 'dismiss' just closes. Either way the occurrence stays in
+ * alertedKeys, so neither answer is asked again.
+ */
+ipcMain.on('notify-command', (evt, command) => {
+  if (!notifyWin || notifyWin.isDestroyed() || evt.sender !== notifyWin.webContents) return;
+  if (command !== 'take' && command !== 'dismiss') return;
+
+  const ev = notifyEvent;
+  closeNotify();
+  if (command !== 'take' || !ev || !win || win.isDestroyed()) return;
+
+  // The user asked for this one, so taking focus is what they wanted.
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  win.webContents.send('meeting-alert-take', ev);
+});
 
 /* -------------------------------------------------------------------- live */
 
@@ -1149,6 +1314,8 @@ app.on('before-quit', async () => {
   // its app is the classic stray-rectangle-on-the-desktop bug, and it must not
   // depend on whether the worker modules happened to load.
   destroyIndicator();
+  closeNotify();
+  if (notifyTimer) { clearTimeout(notifyTimer); notifyTimer = null; }
   try {
     const { killWorkers } = await import('./transcribe.js');
     killWorkers();
@@ -1174,6 +1341,7 @@ if (!app.requestSingleInstanceLock()) {
     screen.on('display-metrics-changed', reclampIndicator);
     // After the window, so the first 'calendar-updated' has somewhere to land.
     calendar.start().catch(() => { /* reported through calendar-updated */ });
+    checkAlerts();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

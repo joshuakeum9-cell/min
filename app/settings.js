@@ -27,6 +27,10 @@ export const DEFAULTS = Object.freeze({
   provider: '',
   // Keep the window above others while recording.
   alwaysOnTop: true,
+  // Show a small prompt in the corner of the screen shortly before a meeting
+  // on the calendar starts, offering to take notes on it. Off is silent: the
+  // calendar still fills Home, nothing pops up.
+  meetingAlerts: true,
   // Drop standalone uh, um, hm and erm from transcript lines. On by default
   // because that is what a transcript from a commercial service looks like:
   // their recognisers strip disfluencies before anyone sees the text. It is

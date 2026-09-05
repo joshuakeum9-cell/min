@@ -94,6 +94,11 @@ contextBridge.exposeInMainWorld('api', {
    *          title:string}} payload  you/them are 0..1 audio levels.
    */
   recordingState: (payload) => ipcRenderer.send('recording-state', payload),
+  /**
+   * The user pressed "Take notes" on a meeting prompt. The payload is the
+   * calendar occurrence, so the note it opens is that meeting's.
+   */
+  onMeetingAlertTake: (cb) => subscribe('meeting-alert-take', cb),
   /** 'focus' | 'stop', raised by the floating indicator. */
   onIndicatorCommand: (cb) => subscribe('indicator-command', cb),
 });

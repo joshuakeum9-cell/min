@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--
+  Content Security Policy. Same shape as indicator.html, narrowed to what this
+  page actually loads: there is no audio worklet here, so script-src does not
+  need blob:, and the popup makes no network calls of any kind, so connect-src
+  stays at the 'none' floor.
+
+    script-src  'self' for ./notify.js. Like the other windows, this page has no
+                inline script: authorising one needs a sha256 of its text, which
+                goes stale on any edit and blanks the window with no error, and
+                a window that only exists for the minute before a meeting is the
+                worst place to discover something silently failed to render.
+    style-src   'unsafe-inline' for the <style> block below. The popup cannot
+                import the renderer's stylesheet, so its tokens are copied here.
+    font-src    'self' for the vendored IBM Plex Mono woff2 the time range uses.
+    img-src     kept as indicator.html has it even though the only graphic here
+                is inline SVG markup, which img-src does not govern: an icon
+                added later should not mean reopening the policy.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>MIN meeting reminder</title>
+<style>
+  /*
+   * The meeting popup: one card in the top right of the screen, about a minute
+   * before a calendar meeting starts, asking whether to take notes on it.
+   *
+   * This document IS the window: the window is sized to the card, so the page
+   * background is transparent and #card fills it edge to edge. That also rules
+   * out a drop shadow, which would be clipped at the window bounds, so the card
+   * earns its edge on a wallpaper from a hairline border instead. Consistent
+   * with the rest of MIN, which has no shadows.
+   *
+   * Where the recording nub is deliberately translucent, this card is fully
+   * opaque: the nub is a status light, but this one carries a meeting title you
+   * have to read in a glance, and wallpaper showing through the letters costs
+   * more than the floating look is worth.
+   */
+
+  @font-face {
+    font-family:'IBM Plex Mono'; font-style:normal; font-display:swap;
+    font-weight:400;
+    src:url('./fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+  }
+
+  /* Copied from index.html's :root, not re-picked. Only the tokens this page
+     uses are here; anything added later should be copied across verbatim too. */
+  :root {
+    --surface-raised:#ffffff;
+    --hairline:#e1e1db;
+    --ink:#1c1c1a; --ink-2:#55554f; --ink-3:#8a8a82;
+    --accent-ink:#788c15;
+    --rail-hover:rgba(28,28,26,.05);
+    --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
+    --fs-md:14px; --fs-sm:13px; --fs-xs:12px;
+    --lh-title:1.35; --lh-body:1.5; --lh-ctl:1;
+    --r-card:12px; --r-pill:999px;
+  }
+
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0;
+    /* The window itself is transparent; only #card is visible on the desktop. */
+    background:transparent;
+    color:var(--ink);
+    /*
+     * The system sans stack rather than index.html's vendored Archivo, the same
+     * choice indicator.html made. A separate BrowserWindow loads its own copy of
+     * any face it names, and a 35 KB download in front of a card that has to be
+     * legible the instant it appears is a bad trade for one weight of one font.
+     * That is why --sans is not among the tokens copied above.
+     */
+    font:400 var(--fs-md)/var(--lh-body) system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+    -webkit-user-select:none; user-select:none;
+    cursor:default;
+  }
+
+  #card {
+    display:flex; flex-direction:column; align-items:stretch; gap:5px;
+    /* The anchor for #notifyDismiss, which is placed rather than laid out. */
+    position:relative;
+    /* The window is sized to this card, so the content decides the height. The
+       min-height only catches the case where main rounds the window a pixel or
+       two taller, which would otherwise show as a transparent strip below. */
+    width:320px; min-height:100%;
+    padding:13px 16px 15px;
+    border:1px solid var(--hairline); border-radius:var(--r-card);
+    background:var(--surface-raised);
+  }
+
+  /*
+   * Same treatment as .now-label in index.html, the tag beside the meeting
+   * happening right now in the agenda. The two are saying the same thing about
+   * the same event, so they are meant to look like the same thing.
+   */
+  .eyebrow {
+    margin:0;
+    font-weight:500; font-size:var(--fs-xs); line-height:var(--lh-ctl);
+    color:var(--accent-ink); text-transform:uppercase; letter-spacing:.08em;
+  }
+
+  #notifyTitle {
+    margin:0;
+    font-weight:500; font-size:var(--fs-md); line-height:var(--lh-title);
+    /*
+     * One line. Wrapping would grow a card in a window main has already sized
+     * and placed against the corner of the screen, so a long calendar subject
+     * loses its tail rather than its box.
+     */
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  /* Room for the dismiss button, which sits over the top right corner. Only the
+     two lines that reach that far need it; the time range never does. */
+  .eyebrow, #notifyTitle { padding-right:26px; }
+
+  #notifyTime {
+    margin:0;
+    font:400 var(--fs-xs)/var(--lh-body) var(--mono); color:var(--ink-2);
+    letter-spacing:.02em;
+    /* Mono and tabular like every other time in MIN: a time range is measured
+       text, not prose. */
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* Copied from .btn.primary in index.html rather than shared, for the same
+     reason as the tokens: this window cannot reach that stylesheet. */
+  #notifyTake {
+    align-self:flex-start; margin-top:11px;
+    display:inline-flex; align-items:center; height:32px; padding:0 16px;
+    border:1px solid var(--ink); border-radius:var(--r-pill);
+    background:var(--ink); color:var(--surface-raised);
+    font-family:inherit; font-weight:500; font-size:var(--fs-sm);
+    line-height:var(--lh-ctl); white-space:nowrap;
+    cursor:pointer;
+    transition:background .12s, border-color .12s;
+  }
+  #notifyTake:hover { background:#000; border-color:#000; }
+
+  /* Quiet on purpose. Dismissing is the answer most of these get, but it should
+     not compete with the button that is the reason the window opened. */
+  #notifyDismiss {
+    position:absolute; top:9px; right:9px;
+    width:24px; height:24px; padding:0;
+    display:grid; place-items:center;
+    border:0; border-radius:var(--r-pill);
+    background:transparent; color:var(--ink-3); cursor:pointer;
+  }
+  #notifyDismiss:hover { background:var(--rail-hover); color:var(--ink); }
+
+  svg { display:block; flex:none; }
+  :focus-visible { outline:2px solid var(--accent-ink); outline-offset:1px; }
+</style>
+</head>
+<body>
+  <!--
+    The card ships with a sample meeting in it so the page can be styled by
+    opening it in a browser, where no preload runs. notify.js clears these three
+    lines the moment it finds a real bridge to push a real meeting.
+  -->
+  <div id="card">
+    <button id="notifyDismiss" type="button" title="Dismiss" aria-label="Dismiss">
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+        <path d="M1 1 L9 9 M9 1 L1 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <p class="eyebrow"><span id="notifyWhen">In 1 minute</span></p>
+    <p id="notifyTitle">Weekly product sync</p>
+    <p id="notifyTime">3:00 PM – 4:00 PM</p>
+    <button id="notifyTake" type="button">Take notes</button>
+  </div>
+  <script type="module" src="./notify.js"></script>
+</body>
+</html>

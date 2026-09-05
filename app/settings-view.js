@@ -72,6 +72,7 @@ export function initSettings({ api }) {
   const liveEl = $('liveTranscript');
   const onTopEl = $('alwaysOnTop');
   const fillersEl = $('stripFillers');
+  const alertsEl = $('meetingAlerts');
   const providerSel = $('defaultProvider');
   const openDirBtn = $('openMeetingsDir');
 
@@ -116,6 +117,7 @@ export function initSettings({ api }) {
     if (liveEl) liveEl.checked = Boolean(current.liveTranscript);
     if (onTopEl) onTopEl.checked = Boolean(current.alwaysOnTop);
     if (fillersEl) fillersEl.checked = Boolean(current.stripFillers);
+    if (alertsEl) alertsEl.checked = Boolean(current.meetingAlerts);
     if (providerSel) {
       const id = current.provider ?? '';
       providerSel.value = PROVIDERS.some((p) => p.id === id) ? id : '';
@@ -181,6 +183,9 @@ export function initSettings({ api }) {
   // effect at the transcription boundary, so re-rendering here would show words
   // that differ from the ones in transcript.md.
   fillersEl?.addEventListener('change', () => save({ stripFillers: fillersEl.checked }));
+  // Read on the next poll rather than needing a restart: main checks the
+  // setting each time round its loop.
+  alertsEl?.addEventListener('change', () => save({ meetingAlerts: alertsEl.checked }));
   providerSel?.addEventListener('change', () => save({ provider: providerSel.value }));
 
   openDirBtn?.addEventListener('click', async () => {
