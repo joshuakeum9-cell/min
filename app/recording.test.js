@@ -25,6 +25,7 @@ import {
   shiftResults,
   appendTranscript,
 } from './meeting-schema.js';
+import { isLiveComplete } from './live.js';
 
 /* ------------------------------------------------------------- tiny harness */
 
@@ -648,6 +649,35 @@ section('the pipeline , a stopped and resumed meeting end to end');
   eq('the meeting reports both numbers', [meta.durationSeconds, meta.spanSeconds], [1200, 2400]);
   eq('captured time is what the realtime factor is computed against', meta.durationSeconds, 1200);
   ok('and the wall window is the larger of the two', meta.spanSeconds > meta.durationSeconds);
+}
+
+section('may the audio be deleted , the live completeness rule');
+{
+  /*
+   * This flag is the only thing standing between a recording and rm. main.js
+   * deletes mic.wav and system.wav when a live transcript comes back complete,
+   * so "complete" has to mean "no hole in the middle", not "the worker ended
+   * tidily". Both respawn paths make a hole and both have to count.
+   *
+   * The bug this pins down shipped once: the clean-exit branch incremented its
+   * own counter and not `restarts`, so a session that respawned mid-recording
+   * still reported complete, and the audio covering the gap was deleted.
+   */
+  ok('a clean run is complete', isLiveComplete({ ok: true, restarts: 0, cleanExits: 0 }));
+
+  ok('a crash respawn is not', !isLiveComplete({ ok: true, restarts: 1, cleanExits: 0 }));
+  ok('a clean-exit respawn is not either', !isLiveComplete({ ok: true, restarts: 0, cleanExits: 1 }));
+  ok('nor six of them', !isLiveComplete({ ok: true, restarts: 0, cleanExits: 6 }));
+  ok('nor one of each', !isLiveComplete({ ok: true, restarts: 1, cleanExits: 1 }));
+
+  ok('a session that failed is never complete', !isLiveComplete({ ok: false, restarts: 0, cleanExits: 0 }));
+  ok('not even with clean counters and a truthy-looking ok', !isLiveComplete({ ok: 1, restarts: 0, cleanExits: 0 }));
+
+  // The defaults matter: main.js reads `result?.complete`, and an older or
+  // partial result object must never fall through to "safe to delete".
+  ok('an empty outcome is not complete', !isLiveComplete({}));
+  ok('and neither is a missing one', !isLiveComplete());
+  ok('an outcome carrying only ok defaults both counters to zero', isLiveComplete({ ok: true }));
 }
 
 /* ------------------------------------------------------------------ result */

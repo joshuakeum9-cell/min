@@ -1238,10 +1238,11 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
     const existing = await fsp.readFile(file, 'utf8').catch(() => '');
     await fsp.writeFile(file, appendTranscript(existing, built.text));
 
-    // A live worker that crashed and respawned leaves a hole: the audio that
-    // played while it was restarting was never transcribed. session.stop()
-    // already tells the two apart (complete is ok with no restarts), and that
-    // difference decides whether the wavs may be deleted below.
+    // A live worker that respawned leaves a hole: the audio that played while
+    // it was restarting was never transcribed. That is true of a crash and of a
+    // clean early finish alike, so session.stop() counts both and reports
+    // complete only when neither happened. That flag, and nothing else, decides
+    // whether the wavs may be deleted below.
     const complete = result?.complete === true;
     const record = {
       at: new Date().toISOString(),
@@ -1250,6 +1251,7 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
       source: 'live',
       complete,
       restarts: result?.restarts ?? 0,
+      cleanExits: result?.cleanExits ?? 0,
       error: result?.error ?? null,
       // Same reasoning as the post-recording pass: keep the suppressed lines
       // themselves, because once the audio is gone a wrong call cannot be undone.

@@ -457,7 +457,14 @@ export function createLiveSession(opts = {}) {
       segments.sort((a, b) => a.t0 - b.t0 || (a.track === 'you' ? -1 : 1));
       const error = fatal?.message ?? workerError ?? null;
       const ok = !error && workerDone;
-      return { segments, ok, complete: ok && restarts === 0, restarts, error };
+      return {
+        segments,
+        ok,
+        complete: isLiveComplete({ ok, restarts, cleanExits }),
+        restarts,
+        cleanExits,
+        error,
+      };
     })();
     return stopping;
   }
@@ -498,6 +505,33 @@ export function createLiveSession(opts = {}) {
  * batch path. Echoes are dropped here by default; buildTranscript runs the same
  * rule again over what is left, which is harmless and catches nothing new.
  */
+/**
+ * Whether a finished live session covers the whole recording, with nothing
+ * missing in the middle of it.
+ *
+ * This is the flag the audio is deleted on (`main.js`, the `live-stop`
+ * handler), so it has to mean "there is no hole here", not "the worker ended
+ * tidily". Both respawn paths leave a hole and both have to count:
+ *
+ * - A crash loses the worker's open utterance and whatever frames were still
+ *   in its pipe.
+ * - A clean early finish is gentler, because the worker flushes both tracks on
+ *   its way out and delivers what it had already decoded. But the replacement
+ *   still takes a couple of seconds to load the model, and every frame spoken
+ *   in that window is dropped.
+ *
+ * Pure and exported so the rule can be tested without spawning a worker. The
+ * first version of the clean-exit fix counted only `restarts`, which left a
+ * clean-exit respawn reporting `complete: true` and quietly authorised deleting
+ * the only copy of the audio covering the gap it had just made.
+ *
+ * @param   {{ok?:boolean, restarts?:number, cleanExits?:number}} outcome
+ * @returns {boolean}
+ */
+export function isLiveComplete({ ok = false, restarts = 0, cleanExits = 0 } = {}) {
+  return ok === true && restarts === 0 && cleanExits === 0;
+}
+
 export function toTranscriptResults(segments, { dropEchoes = true } = {}) {
   return TRACKS.map((track) => {
     const speaker = track === 'you' ? 'You' : 'Them';
