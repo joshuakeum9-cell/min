@@ -27,6 +27,12 @@ export const DEFAULTS = Object.freeze({
   provider: '',
   // Keep the window above others while recording.
   alwaysOnTop: true,
+  // Drop standalone uh, um, hm and erm from transcript lines. On by default
+  // because that is what a transcript from a commercial service looks like:
+  // their recognisers strip disfluencies before anyone sees the text. It is
+  // applied once, at the boundary every line crosses, so what is on screen
+  // and what is on disk are the same words.
+  stripFillers: true,
   // Where the user dragged the floating recording indicator, as "x,y" screen
   // coordinates. Empty means it has never been moved, so it opens at its
   // default corner. A string rather than a pair of numbers so it rides the

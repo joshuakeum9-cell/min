@@ -71,6 +71,7 @@ export function initSettings({ api }) {
   const refreshSel = $('calendarRefresh');
   const liveEl = $('liveTranscript');
   const onTopEl = $('alwaysOnTop');
+  const fillersEl = $('stripFillers');
   const providerSel = $('defaultProvider');
   const openDirBtn = $('openMeetingsDir');
 
@@ -114,6 +115,7 @@ export function initSettings({ api }) {
     }
     if (liveEl) liveEl.checked = Boolean(current.liveTranscript);
     if (onTopEl) onTopEl.checked = Boolean(current.alwaysOnTop);
+    if (fillersEl) fillersEl.checked = Boolean(current.stripFillers);
     if (providerSel) {
       const id = current.provider ?? '';
       providerSel.value = PROVIDERS.some((p) => p.id === id) ? id : '';
@@ -175,6 +177,10 @@ export function initSettings({ api }) {
   });
   liveEl?.addEventListener('change', () => save({ liveTranscript: liveEl.checked }));
   onTopEl?.addEventListener('change', () => save({ alwaysOnTop: onTopEl.checked }));
+  // Deliberately no re-render of anything already on screen. The setting takes
+  // effect at the transcription boundary, so re-rendering here would show words
+  // that differ from the ones in transcript.md.
+  fillersEl?.addEventListener('change', () => save({ stripFillers: fillersEl.checked }));
   providerSel?.addEventListener('change', () => save({ provider: providerSel.value }));
 
   openDirBtn?.addEventListener('click', async () => {

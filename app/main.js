@@ -342,7 +342,11 @@ ipcMain.handle('transcribe', async (_evt, dir) => {
 
   const job = (async () => {
     const { transcribeMeeting } = await import('./transcribe.js');
-    const r = await transcribeMeeting(key, { threads: 4, quiet: true });
+    const r = await transcribeMeeting(key, {
+      threads: 4,
+      quiet: true,
+      stripFillers: settings.get('stripFillers') !== false,
+    });
     await reindexSoon();
     return {
       count: r.count,
@@ -845,6 +849,9 @@ ipcMain.handle('live-start', async (_evt, opts) => {
     live?.kill();
     liveMeta = { title: opts?.title ?? '' };
     live = createLiveSession({
+      // Read once, at the start of the recording. Changing the setting mid-call
+      // would make the first half of the transcript disagree with the second.
+      stripFillers: settings.get('stripFillers') !== false,
       onSegment: (seg) => win?.webContents.send('live-segment', seg),
       onEcho: (seg) => win?.webContents.send('live-segment', { ...seg, echo: true }),
       onReady: () => win?.webContents.send('live-status', { state: 'ready' }),

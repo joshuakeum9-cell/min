@@ -26,6 +26,7 @@ import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureModel, llmPath, modelReady, MANIFEST, MODELS_DIR, totalBytes } from '../m0/lib/models.js';
+import { stripFillers as removeFillers } from './fillers.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Inside a packaged app this file lives in app.asar, but the worker is spawned by
@@ -127,6 +128,7 @@ function frame(track, samples) {
  * @param {number}  [opts.stopTimeoutMs]  how long stop() waits for the last segments, default 60 s
  * @param {number}  [opts.readyTimeoutMs] how long to wait for the model load, default 120 s
  * @param {number}  [opts.maxRestarts]    respawns allowed after a mid-recording crash, default 2
+ * @param {boolean} [opts.stripFillers]   drop standalone uh/um/hm from each line, default false
  */
 export function createLiveSession(opts = {}) {
   const {
@@ -143,6 +145,7 @@ export function createLiveSession(opts = {}) {
     stopTimeoutMs = 60_000,
     readyTimeoutMs = 120_000,
     maxRestarts = 2,
+    stripFillers = false,
   } = opts;
 
   const segments = [];
@@ -237,7 +240,18 @@ export function createLiveSession(opts = {}) {
 
   function handleMessage(msg) {
     if (msg.type === 'segment') {
-      const seg = { track: msg.track, t0: msg.t0, t1: msg.t1, text: msg.text, rms: msg.rms, echo: !!msg.echo };
+      /*
+       * Fillers come off here rather than in the worker. The worker is
+       * asar-unpacked, so a module it imports has to be unpacked with it, and
+       * getting that wrong ships a build that works in development and fails
+       * once installed. This is also the single boundary every line crosses, so
+       * the bubbles on screen and the transcript on disk can never disagree.
+       */
+      const text = stripFillers ? removeFillers(msg.text) : msg.text;
+      // An utterance that was nothing but a hesitation is not an utterance. A
+      // bubble reading "" would be a speaker turn that never happened.
+      if (!text) return;
+      const seg = { track: msg.track, t0: msg.t0, t1: msg.t1, text, rms: msg.rms, echo: !!msg.echo };
       if (msg.echo) seg.echoOf = msg.echoOf;
       segments.push(seg);
       onSegment?.(seg);

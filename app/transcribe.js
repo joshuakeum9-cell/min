@@ -19,6 +19,7 @@
  *   node app/transcribe.js ~/Meetings/<folder>
  *   node app/transcribe.js --all                  # every untranscribed meeting
  *   node app/transcribe.js <folder> --keep-audio  # do not delete the wavs
+ *   node app/transcribe.js <folder> --keep-fillers # leave uh, um and hm in
  */
 
 import fsp from 'node:fs/promises';
@@ -29,6 +30,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureModel, parakeetPaths, llmPath } from '../m0/lib/models.js';
 import { detectHardware, isMain } from '../m0/lib/hardware.js';
+import { stripFillers as removeFillers } from './fillers.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Inside a packaged app this file lives in app.asar, but the worker is spawned by
@@ -257,9 +259,20 @@ export function buildTranscript(results, opts = {}) {
     .flatMap((r) => r.segments)
     .sort((a, b) => a.start - b.start || (a.speaker === 'You' ? -1 : 1));
 
+  /*
+   * Fillers come off before bleed suppression rather than after. Suppression
+   * decides whether two lines are the same words arriving on both tracks, and
+   * it should compare the words the transcript will actually carry: "um, yes"
+   * against "yes" is the same sentence. An utterance that was nothing but a
+   * hesitation is dropped here, because an empty line is not a speaker turn.
+   */
+  const spoken = opts.stripFillers
+    ? all.map((s) => ({ ...s, text: removeFillers(s.text) })).filter((s) => s.text)
+    : all;
+
   const { kept, suppressed } = opts.noBleedSuppression
-    ? { kept: all, suppressed: [] }
-    : suppressBleed(all);
+    ? { kept: spoken, suppressed: [] }
+    : suppressBleed(spoken);
 
   const lines = [];
   let last = null;
@@ -368,6 +381,7 @@ export async function transcribeMeeting(dir, opts = {}) {
 
   const { text, count, suppressed } = buildTranscript(results, {
     noBleedSuppression: opts.noBleedSuppression,
+    stripFillers: opts.stripFillers !== false,
   });
 
   if (!allOk && !count) {
@@ -490,6 +504,7 @@ if (isMain(import.meta.url)) {
         threads,
         asrModel: flags.has('--v2') ? 'parakeet-v2' : 'parakeet-v3',
         noBleedSuppression: flags.has('--no-bleed-suppression'),
+        stripFillers: !flags.has('--keep-fillers'),
       });
       if (!r.ok) failures++;
     } catch (err) {
