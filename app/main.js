@@ -906,15 +906,48 @@ ipcMain.handle('live-stop', async (_evt, dir) => {
       if (err.code !== 'ENOENT') throw err;
       meta = {};
     }
+    // A live worker that crashed and respawned leaves a hole: the audio that
+    // played while it was restarting was never transcribed. session.stop()
+    // already tells the two apart (complete is ok with no restarts), and that
+    // difference decides whether the wavs may be deleted below.
+    const complete = result?.complete === true;
     meta.transcript = {
       at: new Date().toISOString(),
       count: built.count,
+      utterances: built.count,
       source: 'live',
+      complete,
+      restarts: result?.restarts ?? 0,
+      error: result?.error ?? null,
+      // Same reasoning as the post-recording pass: keep the suppressed lines
+      // themselves, because once the audio is gone a wrong call cannot be undone.
+      echoesSuppressed: { count: built.suppressed.length, segments: built.suppressed },
       title: liveMeta?.title ?? '',
     };
+
+    // Gated exactly like the post-recording pass: the worker finished cleanly
+    // AND something was recognised. Without this the wavs of a live-transcribed
+    // meeting are never deleted by anything, because the post-pass skips a
+    // meeting that already has a transcript.md. That is roughly 230 MB an hour,
+    // kept forever, for recordings that are already fully transcribed.
+    let deleted = 0;
+    if (complete && built.count) {
+      for (const name of ['mic.wav', 'system.wav']) {
+        try {
+          await fsp.rm(path.join(target, name), { force: true });
+          deleted++;
+        } catch { /* a locked file is not worth failing the transcript over */ }
+      }
+      meta.audioDisposition = 'deleted after a complete live transcript';
+    } else {
+      meta.audioDisposition = complete
+        ? 'kept, nothing was recognised live'
+        : 'kept, the live worker restarted, so the transcript may have a gap';
+    }
+
     await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
     await reindexSoon();
-    return { ok: true, count: built.count, segments };
+    return { ok: true, complete, count: built.count, deleted, segments };
   } catch (err) {
     return { ok: false, error: String(err?.message ?? err), count: 0 };
   } finally {

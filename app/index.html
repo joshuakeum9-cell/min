@@ -407,6 +407,29 @@
   }
   #writeRow #openFolder { margin-left:auto; }
 
+  /*
+   * Paste the assistant's answer back. The hand-off is deliberately manual:
+   * MIN holds no API key, so the round trip is clipboard out, clipboard in.
+   * Shown only once there is a transcript worth writing up.
+   */
+  #pasteRow { flex:none; padding:12px 0; border-top:1px solid var(--hairline); }
+  #pasteRow .pasteHead {
+    display:flex; align-items:center; gap:8px; margin-bottom:8px;
+    font:400 var(--fs-sm)/var(--lh-ctl) var(--sans); color:var(--ink-2);
+  }
+  #pasteRow #saveWriteUp { margin-left:auto; }
+  #pasteNote {
+    width:100%; min-height:96px; resize:vertical; padding:10px 12px;
+    border:1px solid var(--hairline); border-radius:var(--r-card);
+    background:var(--surface-raised); color:var(--ink); outline:none;
+    font:400 var(--fs-md)/var(--lh-body) var(--sans);
+  }
+  #pasteNote:focus { border-color:var(--ink-3); }
+  #pasteNote::placeholder { color:var(--ink-3); }
+
+  /* The saved write-up, rendered. Sits above the transcript, below the notes. */
+  #writeUp { flex:none; padding:16px 0; border-top:1px solid var(--hairline); }
+
   /* Rendered markdown, for write-ups and read-mode notes via md.js. */
   /* Reading matches writing: the rendered write-up sits at the same size as #notes. */
   .doc { font:400 var(--fs-lg)/var(--lh-body) var(--sans); color:var(--ink); }
@@ -710,6 +733,17 @@
           </select>
           <button id="openFolder" class="btn ghost sm">Folder</button>
         </section>
+
+        <section id="pasteRow" class="hide">
+          <div class="pasteHead">
+            <span>Paste the answer back here to keep it with the meeting.</span>
+            <button id="saveWriteUp" class="btn sm">Save write-up</button>
+          </div>
+          <textarea id="pasteNote" spellcheck="false"
+            placeholder="Paste the write-up your assistant produced."></textarea>
+        </section>
+
+        <section id="writeUp" class="doc hide"></section>
 
         <aside id="transcriptPanel" class="card hide">
           <div class="panelHead">

@@ -64,7 +64,14 @@ contextBridge.exposeInMainWorld('api', {
    * rather than serialised as JSON.
    */
   livePush: (track, buffer) => ipcRenderer.send('live-push', track, buffer),
-  liveStop: () => ipcRenderer.invoke('live-stop'),
+  /**
+   * `dir` is the meeting folder the note was just saved into. It is what lets
+   * main write transcript.md; called with nothing, the lines come back in the
+   * reply and are never written to disk.
+   *
+   * @param {string} [dir]
+   */
+  liveStop: (dir) => ipcRenderer.invoke('live-stop', dir),
   onLiveSegment: (cb) => subscribe('live-segment', cb),
   onLiveStatus: (cb) => subscribe('live-status', cb),
 

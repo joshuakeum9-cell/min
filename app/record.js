@@ -615,15 +615,26 @@ async function finishLive(saved) {
   let result = null;
   try {
     setStatus('Finishing the live transcript...');
-    result = await api.liveStop();
+    // The folder the save above produced. Without it main has nowhere to put
+    // transcript.md, which is how every live transcript used to be discarded.
+    result = await api.liveStop(saved?.dir);
   } catch (e) {
     setStatus('Live transcript did not finish (' + e.message + '). Use Write up to transcribe from the audio.', 'warn');
     return;
   }
   if (!saved) return; // nothing on disk to attach it to; the status already says so
   const fresh = await reloadCurrent();
-  if (fresh?.transcript) {
-    setStatus(`Saved with a live transcript of ${currentSegments.length} lines.`, 'good');
+  if (fresh?.transcript && result?.complete === false) {
+    // Written, but the worker restarted part-way, so the audio it missed is not
+    // in these lines. The wavs are kept for exactly this case, and Write up can
+    // still make a complete transcript from them.
+    setStatus(
+      `Saved with a live transcript of ${result.count} lines, but the transcriber ` +
+      'restarted during the meeting, so it may have a gap. The audio was kept: ' +
+      'use Write up to transcribe it again.', 'warn');
+  } else if (fresh?.transcript) {
+    const n = result?.count ?? currentSegments.length;
+    setStatus(`Saved with a live transcript of ${n} lines.`, 'good');
   } else if (result?.segments?.length) {
     currentSegments = result.segments.filter((s) => !s.echo);
     renderBubbles($('bubbles'), currentSegments, { live: false });
