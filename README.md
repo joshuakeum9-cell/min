@@ -8,8 +8,9 @@ speech models; after that, recording and transcription work offline.
 Two things do use the network, and both are your choice. The write-up hands your
 transcript and your typed notes to an assistant you already pay for, by clipboard or by a
 Claude Desktop extension. And if you connect a calendar, MIN fetches that one address on a
-timer so your upcoming meetings appear on Home and your recordings are named after the
-event. Nothing else is sent anywhere, and your notes and transcripts are never uploaded.
+timer so your upcoming meetings appear on Home and a note opened from one of them is
+named after it. Nothing else is sent anywhere, and your notes and transcripts are never
+uploaded.
 
 > **Measured:** throughput, the hard chunk ceiling, loopback continuity through silence,
 > speech memory. All of it on one machine, the developer's desktop, which every
@@ -56,12 +57,26 @@ devDependency used only by the `m0/` benchmarks.
 ## What is on screen
 
 **Home.** A rail down the left with Home, My notes and Settings. The column beside it
-opens on "Coming up", the meetings on your calendar for the next seven days, under a
-row per day showing the weekday and the date, with today marked by a dot and anything
-already in progress kept at the top. Under that, your notes, grouped by the day they
-were recorded and labelled Today, Yesterday, then the date. The search box
+opens on "Coming up", the meetings on your calendar for the next 14 days, under a
+row per day showing the date, the month and the weekday, with today marked by a dot and
+anything already in progress kept at the top. Under that, your notes, grouped by the day
+they were recorded and labelled Today, Yesterday, then the date. The search box
 at the bottom, or Ctrl K from anywhere, searches titles, the notes you typed and the
 full transcripts.
+
+**Paging the agenda.** Five meetings at a time, with a back arrow, a forward arrow and a
+Today button that appears once you have paged away from the first page. The paging counts
+meetings rather than days, so the card is one height whether a day holds one meeting or
+nine, and a fortnight of them never pushes your notes off the screen. Meetings that have
+already finished are not listed.
+
+**Moving a note to the trash.** Every note row carries a three-dots button, shown when
+you hover the row or reach it with the keyboard, and its one item is "Move to trash". It
+goes to the operating system's recycle bin, not to a deletion, so you can put it back
+yourself from there. There is no confirmation dialog, on purpose: the recycle bin is the
+confirmation, a line on Home names the meeting and says where it went, and a modal in
+front of something this reversible is the kind of friction that trains people to click
+through the dialogs that do matter.
 
 **Connecting a calendar.** One field in Settings, and it is a secret iCal address, not a
 sign-in. In Google Calendar the path is **Settings > your calendar > "Secret address in
@@ -74,11 +89,37 @@ credential, readable by anyone who has it, so it is kept by the main process in 
 settings file rather than in the renderer, and no error message or log ever prints it.
 Cancelled events are dropped.
 
-**Auto-titling.** Start a recording while an event is on and the note takes that event's
-title and its attendees, and says so with an "Auto-titled from calendar" chip. A meeting
-in progress wins; otherwise the nearest one starting within ten minutes is used, and an
-all-day item is used only if nothing else fits, because "Team offsite" is a true answer
-and a useless recording title. A title you typed yourself is never overwritten.
+**Which notes belong to a meeting.** "+ New note" is impromptu. It adopts no calendar
+meeting, and pressing Record no longer attaches one either. **This is a change from
+earlier versions**, where every recording took the title of whatever calendar event was
+nearest in time, so a note started between two meetings came out named after one you were
+not in. Granola draws the line in the same place: its New Note is for an ad-hoc meeting
+or call that is not on your calendar, and notes made that way are not linked to the
+calendar at all.
+
+A note becomes a calendar note by being opened from the meeting instead. Click a meeting
+in "Coming up" and a note opens for that meeting, carrying its title, its time and its
+attendees, and saying so with a "From calendar" chip. The click does not start recording:
+opening a meeting days early to jot down what you want out of it is the other half of
+what that click is for, and a click that switched on the microphone would make that
+unusable.
+
+**The meeting prompt.** About a minute before a meeting on your calendar, a small card
+appears in the top right corner of the screen naming it. Its "Take notes" button opens a
+note for that meeting and starts recording, in one press. Dismissing it, or taking it, is
+remembered for that occurrence, so it does not come back a minute later. It is on by
+default, as "Prompt me when a meeting is about to start" under Settings > Recording, and
+it needs a calendar connected.
+
+It does not filter on how many people are invited. Granola treats a calendar entry as a
+meeting only at two attendees or more; the person this was built for records university
+lectures, which come off his feed with zero attendees or one, and that filter would make
+the whole feature invisible to him. All-day events never prompt, because "Out of office"
+is not a meeting to take notes in and an all-day item starts at midnight. A meeting that
+started up to five minutes ago still prompts, so an app that was closed or asleep at the
+lead moment does not silently miss the meeting you are already sitting in. And like the
+floating pill, the card cannot take focus, which is the point of it while a call is
+starting; the cost is that its X is the way out of it rather than Escape.
 
 **The two-sided live transcript.** System audio on the left in grey, your microphone on
 the right in green, because they are two separate recordings and not one mixed one. A
@@ -127,14 +168,16 @@ audio that was actually captured, and the span is the wall-clock window it happe
 one-hour call stopped for a twenty-minute break is forty minutes of audio inside a
 sixty-minute span, and both of those are worth knowing.
 
-**The recording indicator.** In the note, a round waveform button beside Record: grey and
-still when nothing is being captured, olive-green and moving while it is, and clicking it
-shows or hides the transcript. While a recording runs, a small pill also floats above
+**The recording indicator.** In the note, one round waveform button beside Record, which is
+also the bar's only level meter: grey and still when nothing is being captured, olive-green
+and moving while it is, following whichever side of the conversation is louder, and
+clicking it shows or hides the transcript. While a recording runs, a small pill also floats above
 every other window, which is the case that matters, because the moment you switch to Zoom
 or Teams every sign inside MIN is hidden. It shows itself only then: while MIN is the
 window in front it hides, because an always-on-top pill covering the note it belongs to
-is clutter. It carries the same levels split left and right,
-an elapsed clock and a stop button, clicking its face brings the note back, and it can be
+is clutter. It carries four bars mixed left to right, the call at one end and your
+microphone at the other, so it says who is talking without any labels, and beside them
+an elapsed clock and a stop button. Clicking its face brings the note back, and it can be
 dragged anywhere and remembers where. It is deliberately non-focusable, so it cannot take
 focus off the call. It appears when a recording starts and is gone when one ends.
 
@@ -225,6 +268,7 @@ again. Everything else sits outside your Meetings folder, in `%APPDATA%\MIN`, or
 | `mcp-index.db` | The Claude Desktop extension's own copy of that index, written by `mcp/server.js`, so with the extension installed this folder holds two full plaintext copies of every meeting. Separate file so the two processes never rebuild one database at the same time. |
 | `settings.json` | Your settings, in plaintext, including the secret calendar address. Anyone who can read that file can read that calendar. |
 | `calendar-cache.json` | The last calendar fetch, so Home still has an agenda offline. Plaintext meeting titles, times and attendees. |
+| `live-transcript.log` | What the live transcription worker wrote to its error output, appended while a recording runs. A debugging aid rather than a feature: its size is checked once per launch and the file is thrown away if it has passed 256 KB, so a single long session can grow past that and is only trimmed the next time MIN starts, and every failure to write it is swallowed, because a log must never be the reason a meeting is lost. Before it existed, a worker that finished cleanly could be reported as a crash with nothing on disk to say otherwise. |
 | `models\` | The speech models, 642 MiB. |
 | the rest | Electron's own GPU, network and cache directories. |
 

@@ -34,16 +34,16 @@
    * three closely spaced off-whites do the work borders and shadows would
    * otherwise do, so there are no drop shadows anywhere in this file.
    *
-   * One chromatic accent, olive. It fills the Record button, tints the "you"
-   * side of the transcript, and marks today in the agenda. The coral brand
-   * dot survives in exactly one place, the wordmark tile at the foot of the
-   * rail, because it is identity rather than state.
+   * One chromatic accent, olive. It fills the Record button and tints the
+   * "you" side of the transcript. Today in the agenda is marked by a dot in
+   * --danger, not the accent: that warm orange also carries the live dot and
+   * the warning states, so it reads as "happening now" as well as "wrong".
    *
    * Three typefaces, all SIL OFL and all self-hosted in app/fonts so a launch
    * never reaches a font CDN. Archivo carries the interface. IBM Plex Mono is
    * for anything measured: clocks, timestamps, event times, the status line.
-   * Instrument Serif is the display face for "Coming up", the day numerals
-   * and note titles; it is what stops the window reading as a settings panel.
+   * Instrument Serif is the display face for "Coming up" and note titles; the
+   * day numerals are sans 600. It stops the window reading as a settings panel.
    *
    * Dynamic regions (agenda, note list, chips, bubbles) are filled by JS. The
    * class names those modules must emit are listed beside each section so the
@@ -704,9 +704,9 @@
   #micPill:hover { border-color:var(--ink-3); }
   #micPill .waveform { display:flex; align-items:center; gap:2px; height:16px; }
   /*
-   * record.js writes --lvl (0 to 1) per bar and the
-   * bar scales from a floor of 0.18, so a silent room still shows a glyph
-   * rather than four invisible slivers.
+   * record.js writes --lvl (0 to 1) per bar and each bar scales from its own
+   * --rest floor, the .34/.62/.5/.3 below, so a silent room still draws the
+   * glyph rather than four invisible slivers.
    */
   #micPill .waveform i {
     display:block; width:2px; height:16px; border-radius:1px;

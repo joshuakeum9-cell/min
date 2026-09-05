@@ -214,7 +214,7 @@
       <div class="step">
         <p class="n">01 · Record</p>
         <h3>Both sides, no bot</h3>
-        <p>Your microphone and the call audio are captured as two separate tracks. Nobody sees a bot join the meeting, because none does. Start one while a meeting is on your calendar and the note takes that meeting's title and attendees.</p>
+        <p>Your microphone and the call audio are captured as two separate tracks. Nobody sees a bot join the meeting, because none does. Click a meeting on your home screen and the note opens with its title, time and attendees already in it.</p>
       </div>
       <div class="step">
         <p class="n">02 · Type</p>
@@ -249,6 +249,10 @@
         <p>Every meeting is a folder of plain markdown you can open in Notepad. No database, no proprietary format, nothing to export.</p>
       </div>
       <div class="card">
+        <h3>Throwing a note away is undoable</h3>
+        <p>Three dots on any note, then Move to trash. It goes to the recycle bin your computer already has, so it is yours to put back. There is no "are you sure" step, on purpose: the recycle bin is the confirmation, and a dialog in front of something this reversible only teaches you to click through the ones that matter.</p>
+      </div>
+      <div class="card">
         <h3>The recording is deleted</h3>
         <p>Audio is removed once transcription succeeds, not merely kept locally. If a transcription fails the audio is kept, because then it is the only way to try again.</p>
       </div>
@@ -259,6 +263,10 @@
       <div class="card">
         <h3>Your calendar, without a sign-in</h3>
         <p>Paste the secret iCal address from your calendar settings and your next meetings appear on the home screen. No Google sign-in, no OAuth, no consent screen: it is one HTTPS address MIN reads on a timer, and it works with Outlook, iCloud and Fastmail too. That address is a credential, so it stays on your machine and is never printed in a log.</p>
+      </div>
+      <div class="card">
+        <h3>A nudge, a minute before</h3>
+        <p>Just before a meeting on your calendar, a small card appears in the corner naming it, with a Take notes button that opens a note for that meeting and starts recording, and an X to send it away. Either answer sticks, and it will not raise that meeting again. It cannot take focus, so it never steals the call it is announcing. All-day entries never nudge you, a meeting that started five minutes ago still does, and it does not skip a meeting for having too few people in it, so a lecture or a one-to-one counts like anything else.</p>
       </div>
       <div class="card">
         <h3>You always know it is recording</h3>
@@ -298,7 +306,7 @@
           <tr><td>Installer</td><td>About 118 MB. Speech models download once on first run, 642 MiB</td></tr>
           <tr><td>Where things live</td><td>Meetings are markdown in a folder you own. Models, the search index, the MCP index, your settings and the cached calendar sit in <code>%APPDATA%\MIN</code>, plaintext and searchable. Uninstalling deliberately removes neither, so notes are never destroyed on the way out</td></tr>
           <tr><td>Live transcript</td><td>Written as the meeting runs, from the two tracks, with no diarization model. Lines appear when a speaker pauses, so a short remark lands a second or two behind and a single utterance is capped at 20 seconds. It can be switched off, and then the transcript is written after you stop</td></tr>
-          <tr><td>Calendar</td><td>Optional. One secret iCal address, pasted in Settings, fetched over HTTPS every 5 to 60 minutes. No sign-in, no OAuth, no account. Recordings take the title and attendees of the event they start in</td></tr>
+          <tr><td>Calendar</td><td>Optional. One secret iCal address, pasted in Settings, fetched over HTTPS every 5 to 60 minutes. No sign-in, no OAuth, no account. The next 14 days appear on the home screen, five meetings at a time, and a note opened from one of them takes its title and attendees</td></tr>
           <tr><td>Network use</td><td>Two things, both your choice: fetching the calendar address you pasted, and sending a write-up out. Nothing else, once the models are downloaded. Notes and transcripts are never uploaded</td></tr>
           <tr><td>Requirements</td><td>Windows 10 or 11, 64-bit. Transcription uses the CPU backend, so no graphics card is needed</td></tr>
           <tr><td>Licence</td><td>MIT. Speech models are CC-BY-4.0 and MIT, fetched at runtime</td></tr>
@@ -334,7 +342,7 @@
       <aside class="warn">
         <p style="margin:0 0 12px"><strong>About that warning</strong></p>
         <p style="margin:0 0 12px">The installer is unsigned: a signing certificate costs money every year and this is a free personal project. Unsigned means Windows cannot confirm who published it, not that anything is wrong with it. Some antivirus engines flag unsigned Electron installers too, usually as a generic heuristic rather than a named threat.</p>
-        <p style="margin:0">Check what you downloaded: 117,996,976 bytes, SHA-256 <code>ffb07d15a9a9591887b54eda72d18e0832f9c6c15b322b36cbfa278e51feee56</code>. That hash is published here and on the same release page as the file it describes, so it catches a corrupted or truncated download but not a substituted one, and it is no substitute for a code signature. Windows Explorer shows 112 MB because it counts in binary units. Or build it yourself with <code>npm run dist</code>, which avoids both warnings.</p>
+        <p style="margin:0">Check what you downloaded: 118,015,127 bytes, SHA-256 <code>6ce1487ea720d38bbed7e8d25b20d60168de4f09cb7f3f534cb5f91d20010858</code>. That hash is published here and on the same release page as the file it describes, so it catches a corrupted or truncated download but not a substituted one, and it is no substitute for a code signature. Windows Explorer shows 113 MB because it counts in binary units. Or build it yourself with <code>npm run dist</code>: a file you built has no mark of the web, so SmartScreen stays quiet, though the result is unsigned too and an antivirus heuristic can still reach it.</p>
       </aside>
     </div>
   </div>
