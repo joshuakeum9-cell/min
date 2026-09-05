@@ -411,8 +411,18 @@ try {
    * never on whether an OS window is on screen, because main deliberately
    * hides the nub while the note window is focused, which it is here.
    */
-  await evaluate(`window.api.recordingState({ recording: true, you: 0.5, them: 0.4, title: 'smoke' })`);
-  const nub = await waitForIndicator(true);
+  // Caught rather than thrown. A build old enough to have no recordingState on
+  // its bridge is exactly what --exe is pointed at, and one missing method
+  // should fail this check and let the rest of the run report, not abort it and
+  // throw away every result after it.
+  let drove = true;
+  try {
+    await evaluate(`window.api.recordingState({ recording: true, you: 0.5, them: 0.4, title: 'smoke' })`);
+  } catch (e) {
+    drove = false;
+    check(false, 'the bridge exposes recordingState', e.message.split(String.fromCharCode(10))[0]);
+  }
+  const nub = drove ? await waitForIndicator(true) : null;
 
   /* 8 */ if (check(Boolean(nub), 'floating indicator appears while recording',
     nub ? nub.url.split('/').pop() : 'no indicator.html target after 3s')) {
@@ -438,7 +448,7 @@ try {
     /* 10 */ check(nubState.moveTo === 'function', 'indicator bridge exposes moveTo', `typeof ${nubState.moveTo}`);
   }
 
-  await evaluate(`window.api.recordingState({ recording: false, you: 0, them: 0, title: 'smoke' })`);
+  if (drove) await evaluate(`window.api.recordingState({ recording: false, you: 0, them: 0, title: 'smoke' })`);
   /* 11 */ const stillThere = await waitForIndicator(false);
   check(stillThere === null, 'floating indicator is gone once recording stops',
     stillThere ? 'indicator.html target survived the stop' : 'target destroyed');
