@@ -3,10 +3,13 @@
 Meeting notes that never leave your machine. It records both sides of a call without a
 bot joining, transcribes on your own CPU, and writes plain markdown into a folder you
 own. No account, no API key, no subscription to this. First run downloads 642 MiB of
-speech models; after that, recording and transcription work offline. The write-up is the
-exception: the app hands your transcript and your typed notes to an assistant you
-already pay for, by clipboard or by a Claude Desktop extension, and that is the only
-point at which anything leaves your machine.
+speech models; after that, recording and transcription work offline.
+
+Two things do use the network, and both are your choice. The write-up hands your
+transcript and your typed notes to an assistant you already pay for, by clipboard or by a
+Claude Desktop extension. And if you connect a calendar, MIN fetches that one address on a
+timer so your upcoming meetings appear on Home and your recordings are named after the
+event. Nothing else is sent anywhere, and your notes and transcripts are never uploaded.
 
 > **Measured:** throughput, the hard chunk ceiling, loopback continuity through silence,
 > speech memory. All of it on one machine, the developer's desktop, which every

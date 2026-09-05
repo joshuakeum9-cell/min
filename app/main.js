@@ -19,6 +19,9 @@ import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
+import { createSettings } from './settings.js';
+import { createCalendarStore } from './calendar-store.js';
+
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
 
@@ -73,15 +76,19 @@ let win = null;
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 420,
-    height: 620,
-    minWidth: 360,
-    minHeight: 420,
+    // A 420px always-on-top strip reads as a sticky note whatever the styling.
+    // The window is now a document window: rail, agenda and a centred column.
+    // Staying on top while not recording is the behaviour of a widget, so it is
+    // off by default and applied only around a recording, when the setting asks.
+    width: 1100,
+    height: 780,
+    minWidth: 900,
+    minHeight: 620,
     title: 'MIN',
-    // The renderer's --canvas. Anything else flashes in the gap between the
+    // The renderer's --surface. Anything else flashes in the gap between the
     // window appearing and the first paint.
-    backgroundColor: '#ffffff',
-    alwaysOnTop: true,
+    backgroundColor: '#f7f7f2',
+    alwaysOnTop: false,
     // sandbox is left at Electron's default, on. That constrains preload.cjs:
     // it must stay CommonJS and stay on Electron's renderer-safe exports, since
     // a sandboxed preload cannot require arbitrary Node modules.
@@ -176,7 +183,7 @@ async function uniqueDir(base) {
 /* --------------------------------------------------------------------- ipc */
 
 ipcMain.handle('save-meeting', async (_evt, payload) => {
-  const { startedAt, endedAt, title, notes, sampleRate, mic, system, timeline } = payload;
+  const { startedAt, endedAt, title, notes, sampleRate, mic, system, timeline, calendarEvent } = payload;
 
   // Built from a slug here rather than taken from the renderer, but it goes
   // through the same gate, and the gate runs before anything is created so no
@@ -209,6 +216,10 @@ ipcMain.handle('save-meeting', async (_evt, payload) => {
       system: trackMeta(sysF32, sampleRate, durationSeconds),
     },
     timeline,
+    // The calendar occurrence this recording was auto-titled from, when there
+    // was one. library.js reads the attendee list back out of here for the
+    // home rows, so the shape matters: see calendar.js for the fields.
+    calendarEvent: calendarEvent && typeof calendarEvent === 'object' ? calendarEvent : null,
     audioDisposition: 'kept: delete after transcription succeeds',
     transcript: null,
   };
@@ -361,6 +372,17 @@ ipcMain.handle('save-note', async (_evt, dir, text) => {
 });
 
 /**
+ * Save the notes the user typed during the call. A different file from the
+ * write-up above: my-notes.md is the skeleton the write-up is built from, so
+ * losing one to the other would destroy the input to the whole product.
+ */
+ipcMain.handle('save-notes', async (_evt, dir, text) => {
+  const target = confine(dir);
+  await fsp.writeFile(path.join(target, 'my-notes.md'), (text ?? '').trimEnd() + '\n');
+  return { chars: (text ?? '').length };
+});
+
+/**
  * Deletion goes to the recycle bin, never a hard unlink. A meeting is a record of
  * a real conversation and the user may want it back.
  */
@@ -434,6 +456,122 @@ ipcMain.handle('set-always-on-top', (_evt, on) => {
   return Boolean(on);
 });
 
+ipcMain.handle('app-version', () => app.getVersion());
+
+/* ---------------------------------------------------------------- settings */
+
+const settings = createSettings(path.join(app.getPath('userData'), 'settings.json'));
+
+ipcMain.handle('settings-get', () => settings.all());
+ipcMain.handle('settings-set', (_evt, patch) => settings.set(patch));
+
+/* ---------------------------------------------------------------- calendar */
+
+/**
+ * The calendar URL is a bearer credential: anyone holding it can read the whole
+ * calendar forever. It is never logged and never leaves this process except in
+ * settings-get, which the settings pane needs in order to show it back.
+ */
+const calendar = createCalendarStore({
+  settings,
+  cachePath: path.join(app.getPath('userData'), 'calendar-cache.json'),
+  onUpdated: (summary) => win?.webContents.send('calendar-updated', summary),
+});
+
+ipcMain.handle('calendar-refresh', () => calendar.refresh());
+ipcMain.handle('calendar-upcoming', (_evt, opts) => calendar.upcoming(opts?.days ?? 7));
+ipcMain.handle('calendar-event-now', () => calendar.eventNow());
+
+/* -------------------------------------------------------------------- live */
+
+// One session at a time: the worker holds a 650 MB model, and two would race the
+// same transcript. Held here rather than per-window so before-quit can reach it.
+let live = null;
+let liveMeta = null;
+
+ipcMain.handle('live-start', async (_evt, opts) => {
+  try {
+    const { createLiveSession } = await import('./live.js');
+    live?.kill();
+    liveMeta = { title: opts?.title ?? '' };
+    live = createLiveSession({
+      onSegment: (seg) => win?.webContents.send('live-segment', seg),
+      onEcho: (seg) => win?.webContents.send('live-segment', { ...seg, echo: true }),
+      onReady: () => win?.webContents.send('live-status', { state: 'ready' }),
+      onProgress: (p) => win?.webContents.send('live-status', { state: 'loading', progress: p }),
+      onError: (err) => win?.webContents.send('live-status', {
+        state: 'error',
+        message: String(err?.message ?? err),
+        recoverable: Boolean(err?.recoverable),
+      }),
+    });
+    return { ok: true };
+  } catch (err) {
+    live = null;
+    // Never fatal: recording continues and the post-recording pass still runs.
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+});
+
+// `on`, not `handle`: audio arrives many times a second and must never wait on a
+// reply. The track is validated because it indexes into the worker's buffers.
+ipcMain.on('live-push', (_evt, track, buf) => {
+  if (!live) return;
+  if (track !== 'you' && track !== 'them') return;
+  if (!buf || typeof buf.byteLength !== 'number' || buf.byteLength % 2) return;
+  try {
+    live.push(track, new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength / 2));
+  } catch { /* a dead worker is reported through live-status, not here */ }
+});
+
+/**
+ * Stop, then write transcript.md from what was already transcribed during the
+ * call. Reuses buildTranscript so the file is byte-identical in format to the
+ * post-recording path, which is what md.js and the MCP server parse.
+ */
+ipcMain.handle('live-stop', async (_evt, dir) => {
+  if (!live) return { ok: false, count: 0 };
+  const session = live;
+  live = null;
+  try {
+    const result = await session.stop();
+    const segments = result?.segments ?? [];
+    if (!dir) return { ok: result?.ok !== false, count: segments.length, segments };
+
+    const target = confine(dir);
+    const { toTranscriptResults } = await import('./live.js');
+    const { buildTranscript } = await import('./transcribe.js');
+    const built = buildTranscript(toTranscriptResults(segments));
+
+    // Same rule as the post-recording path: an empty result is not a success,
+    // so no transcript.md is written and the audio is kept for another try.
+    if (!built.count) return { ok: false, empty: true, count: 0, segments };
+
+    await fsp.writeFile(path.join(target, 'transcript.md'), built.text);
+    const metaPath = path.join(target, 'meeting.json');
+    let meta;
+    try {
+      meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      meta = {};
+    }
+    meta.transcript = {
+      at: new Date().toISOString(),
+      count: built.count,
+      source: 'live',
+      title: liveMeta?.title ?? '',
+    };
+    await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
+    await reindexSoon();
+    return { ok: true, count: built.count, segments };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err), count: 0 };
+  } finally {
+    liveMeta = null;
+  }
+});
+
 /* --------------------------------------------------------------------- app */
 
 // The inFlight coalescing above only holds within one process, so a second copy
@@ -445,6 +583,9 @@ app.on('before-quit', async () => {
   try {
     const { killWorkers } = await import('./transcribe.js');
     killWorkers();
+    const { killLiveSessions } = await import('./live.js');
+    killLiveSessions();
+    calendar.stop();
   } catch { /* nothing spawned yet, or the module never loaded */ }
 });
 
@@ -459,6 +600,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     createWindow();
+    // After the window, so the first 'calendar-updated' has somewhere to land.
+    calendar.start().catch(() => { /* reported through calendar-updated */ });
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

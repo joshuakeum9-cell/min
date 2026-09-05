@@ -57,6 +57,7 @@
     ],
     "asarUnpack": [
       "app/asr-worker.js",
+      "app/asr-live-worker.js",
       "**/node_modules/sherpa-onnx-*/**"
     ],
     "win": {

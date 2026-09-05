@@ -117,7 +117,9 @@ export async function readMeeting(dir) {
     id: path.basename(dir),
     title: meta.title || path.basename(dir),
     startedAt: meta.startedAt ?? null,
+    endedAt: meta.endedAt ?? null,
     durationSeconds: meta.durationSeconds ?? 0,
+    ...calendarFields(meta),
     notes: notes ?? '',
     transcript,
     note,
@@ -130,17 +132,106 @@ export async function readMeeting(dir) {
   };
 }
 
-export async function listMeetings() {
+/**
+ * The calendar event a recording was titled from, as the list needs it. The
+ * whole event is kept in meeting.json under "calendarEvent" (see save-meeting);
+ * the rows only want who was there and which event it was.
+ */
+function calendarFields(meta) {
+  const ev = meta?.calendarEvent;
+  if (!ev || typeof ev !== 'object') return { attendees: [], calendarUid: null, recurring: false };
+  const attendees = Array.isArray(ev.attendees)
+    ? ev.attendees.filter((a) => typeof a === 'string' && a.trim()).slice(0, 50)
+    : [];
+  return {
+    attendees,
+    calendarUid: typeof ev.uid === 'string' && ev.uid ? ev.uid : null,
+    recurring: Boolean(ev.recurring),
+  };
+}
+
+async function meetingDirs() {
   const entries = await fsp.readdir(MEETINGS_DIR, { withFileTypes: true }).catch(() => []);
-  const dirs = entries
+  return entries
     .filter((e) => e.isDirectory())
     .map((e) => path.join(MEETINGS_DIR, e.name))
     .sort()
     .reverse(); // newest first, the one you want is almost always the last one
+}
 
+/** Every meeting with its bodies. This is what the index is built from. */
+export async function listMeetings() {
   const out = [];
-  for (const d of dirs) {
+  for (const d of await meetingDirs()) {
     const m = await readMeeting(d);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
+const exists = (file) => fsp.stat(file).then(() => true).catch(() => false);
+const sizeOf = (file) => fsp.stat(file).then((s) => s.size).catch(() => 0);
+
+/**
+ * One meeting for the home list: meeting.json plus a stat of each file, and no
+ * markdown read at all. Listing used to go through readMeeting, which pulled
+ * every transcript in the library into memory to draw a list of titles.
+ *
+ * Degrades the same way readMeeting does: a missing or corrupt meeting.json is
+ * reconstructed from the folder name, and a folder with nothing in it is null.
+ */
+export async function summariseMeeting(dir) {
+  const [metaRes, hasTranscript, hasNote, notesBytes, micBytes] = await Promise.all([
+    readCapped(path.join(dir, 'meeting.json')),
+    exists(path.join(dir, 'transcript.md')),
+    exists(path.join(dir, 'note.md')),
+    sizeOf(path.join(dir, 'my-notes.md')),
+    sizeOf(path.join(dir, 'mic.wav')),
+  ]);
+
+  let meta = null;
+  try {
+    if (metaRes.text) meta = JSON.parse(metaRes.text);
+  } catch { /* fall through to the reconstructed record */ }
+
+  if (!meta) {
+    // The empty-notes file the recorder always writes is one newline, so a
+    // folder is empty when nothing is bigger than that.
+    if (!hasTranscript && !hasNote && notesBytes <= 1 && metaRes.status === 'absent') return null;
+    const stamp = path.basename(dir).match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})-(.*)$/);
+    meta = {
+      title: stamp ? stamp[6].replace(/-/g, ' ') : path.basename(dir),
+      startedAt: stamp
+        ? new Date(+stamp[1], +stamp[2] - 1, +stamp[3], +stamp[4], +stamp[5]).toISOString()
+        : null,
+      durationSeconds: 0,
+      metaBroken: true,
+    };
+  }
+
+  return {
+    dir,
+    id: path.basename(dir),
+    title: meta.title || path.basename(dir),
+    startedAt: meta.startedAt ?? null,
+    endedAt: meta.endedAt ?? null,
+    durationSeconds: meta.durationSeconds ?? 0,
+    ...calendarFields(meta),
+    // Bytes, not characters: the point is "did they type anything", and a
+    // count that needs the file read defeats the purpose of this function.
+    notesBytes: Math.max(0, notesBytes - 1),
+    hasAudio: micBytes > 44,
+    transcribed: hasTranscript,
+    written: hasNote,
+    metaBroken: Boolean(meta.metaBroken),
+  };
+}
+
+/** Every meeting, newest first, without reading a single markdown file. */
+export async function listSummaries() {
+  const out = [];
+  for (const d of await meetingDirs()) {
+    const m = await summariseMeeting(d);
     if (m) out.push(m);
   }
   return out;

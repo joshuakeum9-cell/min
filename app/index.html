@@ -29,28 +29,30 @@
   /*
    * MIN's design system, light mode, at application scale.
    *
-   * One canvas, one type system, one accent. White canvas, ink type,
-   * canvas-paper panels, and hairlines in place of borders and shadows, so the
-   * window stays quiet enough to sit on top of a call for an hour.
+   * The shell is a rail on a sunken ground beside a main region that keeps its
+   * content in a centred 640px column. Grounds carry the "application" feel:
+   * three closely spaced off-whites do the work borders and shadows would
+   * otherwise do, so there are no drop shadows anywhere in this file.
    *
-   * Coral is the only chromatic colour in the interface, and it does two jobs.
-   * It fills the Record button, the highest-priority action in the product.
-   * Everywhere else it is a mark, never a fill: the brand dot beside the
-   * wordmark, the "on top" checkbox, the clock while a recording runs, the
-   * selected meeting row, the open detail tab, and selected text. The rest of
-   * the interface is greyscale, so anything coral is either the main action or
-   * a pointer at what is live or selected right now.
+   * One chromatic accent, olive. It fills the Record button, tints the "you"
+   * side of the transcript, and marks today in the agenda. The coral brand
+   * dot survives in exactly one place, the wordmark tile at the foot of the
+   * rail, because it is identity rather than state.
    *
-   * Two typefaces ship with the app, both under the SIL Open Font License and
-   * both self-hosted in app/fonts so a launch never reaches a font CDN. IBM
-   * Plex Mono is reserved for technical eyebrows, meter labels and small-caps
-   * captions. Archivo carries every other role: wordmark, titles, body,
-   * buttons. A pill for the primary action, 3-6px radii for in-product
-   * controls.
+   * Three typefaces, all SIL OFL and all self-hosted in app/fonts so a launch
+   * never reaches a font CDN. Archivo carries the interface. IBM Plex Mono is
+   * for anything measured: clocks, timestamps, event times, the status line.
+   * Instrument Serif is the display face for "Coming up", the day numerals
+   * and note titles; it is what stops the window reading as a settings panel.
+   *
+   * Dynamic regions (agenda, note list, chips, bubbles) are filled by JS. The
+   * class names those modules must emit are listed beside each section so the
+   * markup and the stylesheet stay in one contract.
    */
+
   /*
    * Vendored so a launch never contacts Google. Latin subset only; anything
-   * outside it falls through to the stacks in --sans / --mono below.
+   * outside it falls through to the stacks in --sans / --mono / --serif below.
    * Provenance and licence: fonts/README.md, fonts/OFL.txt.
    */
   @font-face {
@@ -69,326 +71,617 @@
     font-weight:500;
     src:url('./fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
   }
+  @font-face {
+    font-family:'Instrument Serif'; font-style:normal; font-display:swap;
+    font-weight:400;
+    src:url('./fonts/instrument-serif-400-latin.woff2') format('woff2');
+  }
+
   :root {
-    --canvas:#ffffff; --canvas-paper:#ededed; --canvas-sunk:#f7f7f7;
-    --hairline:#ededed; --hairline-strong:#dcdcdc;
-    --ink:#0b0b0b; --ink-soft:#212121; --graphite:#353535;
-    --mute:#797979; --ash:#b9b9b9; --slate:#3c4758; --slate-soft:#505b6c;
-    --brand:#f36458; --brand-deep:#dd0000;
-    --success:#37cd84; --error:#dd0000; --link:#0052ef;
+    /* Grounds, lightest to darkest in use: cards, canvas, rail. */
+    --surface:#f7f7f2; --surface-sunken:#f2f2ec; --surface-raised:#ffffff;
+    --hairline:#e1e1db;
+    --ink:#1c1c1a; --ink-2:#55554f; --ink-3:#8a8a82;
+
+    /* Olive. --accent for fills, --accent-ink for text on light grounds. */
+    --accent:#5b6f00; --accent-ink:#788c15; --accent-soft:#b2c248;
+    --you-bubble:#e7ecd2; --them-bubble:#ecece6;
+    --danger:#c2410c; --danger-soft:#f6e2d8;
+
+    /* Coral, kept only for the wordmark tile. Not a state colour any more. */
+    --brand:#f36458;
+
+    /* Ink at low alpha, so hover and active read on any of the three grounds. */
+    --rail-hover:rgba(28,28,26,.05); --rail-active:rgba(28,28,26,.09);
 
     --sans:'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
+    --serif:'Instrument Serif', Georgia, 'Times New Roman', serif;
 
-    --r-xs:3px; --r-sm:4px; --r-md:5px; --r-lg:6px; --r-full:9999px;
+    --r-ctl:6px; --r-card:12px; --r-pill:999px;
+    --col:640px; --gutter:32px;
   }
+
   * { box-sizing:border-box; }
   html, body { height:100%; }
   body {
-    margin:0; background:var(--canvas); color:var(--ink-soft);
-    font:400 15px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
-    display:flex; flex-direction:column; overflow:hidden;
+    margin:0; background:var(--surface); color:var(--ink);
+    font:400 14px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
+    overflow:hidden;
   }
   .hide { display:none !important; }
-  ::selection { background:var(--brand); color:var(--canvas); }
+  ::selection { background:var(--accent-soft); color:var(--ink); }
+  button, input, select, textarea { font-family:inherit; }
+  button { cursor:pointer; }
+  :focus-visible { outline:2px solid var(--accent-ink); outline-offset:2px; }
+  svg { display:block; flex:none; }
 
-  /* ---------------------------------------------------------------- header */
-  header.top {
-    display:flex; align-items:center; gap:16px; padding:0 16px; height:56px;
-    flex:none; background:var(--canvas); border-bottom:1px solid var(--hairline);
-  }
-  .wordmark {
-    display:flex; align-items:center; gap:8px;
-    font:700 19px/1 var(--sans); letter-spacing:0.04em; color:var(--ink);
-  }
-  /* The brand dot beside the wordmark. Identity, not state. */
-  .wordmark::after {
-    content:''; width:8px; height:8px; border-radius:var(--r-full);
-    background:var(--brand); flex:none;
-  }
-  .tabs { display:flex; gap:4px; }
-  .tabs button {
-    background:var(--canvas-paper); border:1px solid transparent; cursor:pointer;
-    height:32px; padding:0 12px; border-radius:var(--r-sm);
-    font:600 11px/1 var(--sans); letter-spacing:.06em; text-transform:uppercase;
-    color:var(--mute);
-  }
-  .tabs button:hover { color:var(--ink); border-color:var(--hairline-strong); }
-  .tabs button.on { background:var(--ink); color:var(--canvas); }
-  .tabs button:focus-visible { outline:2px solid var(--link); outline-offset:1px; }
-  .spacer { flex:1; }
-  .pin {
-    display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
-    font:400 10px/1.5 var(--mono); letter-spacing:.06em; text-transform:uppercase;
-    color:var(--mute);
-  }
-  .pin input { accent-color:var(--brand); margin:0; }
+  /* ------------------------------------------------------------------ shell */
+  .shell { display:grid; grid-template-columns:200px minmax(0,1fr); height:100vh; }
 
+  #rail {
+    background:var(--surface-sunken); border-right:1px solid var(--hairline);
+    display:flex; flex-direction:column; gap:2px; padding:12px 10px 10px;
+    min-height:0;
+  }
+  #searchPill {
+    display:flex; align-items:center; gap:8px; height:32px; padding:0 10px;
+    border-radius:var(--r-pill); border:1px solid var(--hairline);
+    background:var(--surface-raised); color:var(--ink-2);
+    font:400 13px/1 var(--sans); margin-bottom:10px; text-align:left;
+  }
+  #searchPill:hover { color:var(--ink); }
+  #searchPill kbd {
+    margin-left:auto; font:400 10.5px/1 var(--mono); color:var(--ink-3);
+    letter-spacing:.02em;
+  }
+  .railLabel {
+    font:500 11px/1 var(--sans); color:var(--ink-3); letter-spacing:.02em;
+    padding:14px 10px 6px;
+  }
+  .railItem {
+    display:flex; align-items:center; gap:9px; width:100%; height:32px;
+    padding:0 10px; border:none; border-radius:8px; background:none;
+    color:var(--ink-2); font:500 13px/1 var(--sans); text-align:left;
+    transition:background .12s, color .12s;
+  }
+  .railItem:hover { background:var(--rail-hover); color:var(--ink); }
+  /* Selection is a soft fill, not a stripe. A stripe would pull the eye left all day. */
+  .railItem.on { background:var(--rail-active); color:var(--ink); }
+  .railItem svg { color:var(--ink-3); }
+  .railItem.on svg { color:var(--ink); }
+  .railSpacer { flex:1; }
+  #workspace {
+    display:flex; align-items:center; gap:8px; padding:10px 10px 2px;
+    border-top:1px solid var(--hairline); margin-top:8px;
+  }
+  #workspace .tile {
+    width:22px; height:22px; border-radius:var(--r-ctl); background:var(--brand);
+    color:#fff; font:700 12px/22px var(--sans); text-align:center;
+  }
+  #workspace .wm { font:600 13px/1 var(--sans); letter-spacing:.04em; color:var(--ink); }
+  #appVersion { margin-left:auto; font:400 10.5px/1 var(--mono); color:var(--ink-3); }
+
+  /* ---------------------------------------------------------------- content */
+  #content {
+    display:flex; flex-direction:column; min-width:0; min-height:0;
+    background:var(--surface);
+  }
+  #topbar {
+    flex:none; height:48px; display:flex; align-items:center; justify-content:flex-end;
+    padding:0 20px;
+  }
   .view { flex:1; min-height:0; display:flex; flex-direction:column; }
+  /*
+   * The centred column. Width is content plus gutters so the gutters shrink
+   * before the text does when the window is at its 900px minimum.
+   */
+  .col {
+    width:100%; max-width:calc(var(--col) + 2 * var(--gutter)); margin:0 auto;
+    padding:0 var(--gutter) 24px; flex:1; min-height:0; overflow-y:auto;
+  }
+  .bar {
+    flex:none; border-top:1px solid var(--hairline); background:var(--surface);
+  }
+  .barInner {
+    max-width:calc(var(--col) + 2 * var(--gutter)); margin:0 auto;
+    padding:10px var(--gutter); display:flex; align-items:center; gap:12px;
+  }
 
-  /* --------------------------------------------------------------- buttons */
+  h1.display {
+    margin:8px 0 14px; font:400 30px/1.15 var(--serif); letter-spacing:-0.01em;
+    color:var(--ink);
+  }
+  .card {
+    background:var(--surface-raised); border:1px solid var(--hairline);
+    border-radius:var(--r-card);
+  }
+  .empty { color:var(--ink-3); font-size:14px; line-height:1.55; padding:16px; }
+
+  /* ---------------------------------------------------------------- buttons */
   .btn {
-    font:500 13px/1 var(--sans); letter-spacing:-0.01em; cursor:pointer;
-    height:36px; padding:0 14px; border-radius:var(--r-md);
-    border:1px solid var(--hairline-strong); background:var(--canvas); color:var(--ink-soft);
-    display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px;
+    border:1px solid var(--hairline); border-radius:var(--r-ctl);
+    background:var(--surface-raised); color:var(--ink);
+    font:500 13px/1 var(--sans); white-space:nowrap;
     transition:background .12s, color .12s, border-color .12s;
   }
-  .btn:hover { background:var(--canvas-paper); color:var(--ink); border-color:var(--mute); }
-  .btn:focus-visible { outline:2px solid var(--link); outline-offset:2px; }
-  .btn:disabled { opacity:.36; cursor:not-allowed; }
-  .btn:disabled:hover { background:var(--canvas); color:var(--ink-soft); border-color:var(--hairline-strong); }
-
-  /* button-primary-on-light: ink fill, white text, pill */
+  .btn:hover { border-color:var(--ink-3); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
   .btn.primary {
-    background:var(--ink); color:var(--canvas); border-color:var(--ink);
-    border-radius:var(--r-full); height:38px; padding:0 18px;
+    background:var(--ink); color:var(--surface-raised); border-color:var(--ink);
+    border-radius:var(--r-pill); padding:0 16px;
   }
-  .btn.primary:hover { background:#000; border-color:#000; color:var(--canvas); }
+  .btn.primary:hover { background:#000; border-color:#000; }
+  .btn.ghost { background:none; border-color:transparent; color:var(--ink-2); }
+  .btn.ghost:hover { background:var(--rail-hover); color:var(--ink); }
+  .btn.sm { height:28px; padding:0 10px; font-size:12px; }
+  .btn.icon { width:32px; padding:0; justify-content:center; }
+  .btn.icon.on { background:var(--rail-active); color:var(--ink); }
 
-  /* The one coral action in the product. */
-  .btn.brand {
-    background:var(--brand); color:var(--ink); border-color:var(--brand);
-    border-radius:var(--r-full); height:38px; padding:0 18px; font-weight:600;
+  select, input[type=text], input[type=url], input[type=search] {
+    height:34px; padding:0 10px; border:1px solid var(--hairline);
+    border-radius:var(--r-ctl); background:var(--surface-raised); color:var(--ink);
+    font:400 13.5px/1 var(--sans); outline:none;
   }
-  .btn.brand:hover { background:#f5766b; border-color:#f5766b; color:var(--ink); }
-  .btn.sm { height:30px; padding:0 11px; font-size:12px; }
+  select { cursor:pointer; padding-right:6px; font-weight:500; }
+  select:focus, input:focus { border-color:var(--ink-3); }
+  input::placeholder { color:var(--ink-3); }
 
-  .dot { width:8px; height:8px; border-radius:var(--r-full); background:currentColor; flex:none; }
-  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
-  .btn.rec-on .dot { animation:pulse 1.3s ease-in-out infinite; }
-  @media (prefers-reduced-motion: reduce) { .btn.rec-on .dot { animation:none } }
-
-  /* ------------------------------------------------------------- transport */
-  .transport { display:flex; align-items:center; gap:12px; padding:16px 16px 12px; flex:none; }
-  #title {
-    flex:1; min-width:0; background:transparent; border:none; color:var(--ink);
-    font:500 24px/1.1 var(--sans); letter-spacing:-0.024em; padding:0; outline:none;
+  /* ------------------------------------------------------------------- home */
+  /*
+   * Filled by home.js. Its markup, which these selectors follow exactly:
+   *   .agenda-day(.today) > .day-head > (.day-num, .day-stack > (.day-month,
+   *     .day-weekday), .today-dot)
+   *                       > .agenda-events > .event(.now)[style="--tone-ink"]
+   *                           > (.event-rule, .event-body > (.event-title-line >
+   *                              (.event-title, .now-label), .event-time))
+   *   .agenda-empty for "No more events today", plus .link for the settings row.
+   * The tone custom properties (--tone-bg, --tone-ink) are set inline per row
+   * from a hash of the title, so a meeting keeps its colour between sessions.
+   */
+  #comingUp { padding:4px 0; }
+  .agenda-day { display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; padding:12px 16px; }
+  .agenda-day + .agenda-day { border-top:1px solid var(--hairline); }
+  .day-head { display:flex; align-items:flex-start; gap:7px; position:relative; }
+  .day-num { font:400 27px/1 var(--serif); color:var(--ink); font-variant-numeric:tabular-nums; }
+  .day-stack {
+    display:flex; flex-direction:column; gap:1px; padding-top:3px;
+    font:400 11px/1.2 var(--sans); color:var(--ink-3); letter-spacing:.01em;
   }
-  #title::placeholder { color:var(--ash); }
-  #clock {
-    font:400 13px/1 var(--mono); color:var(--mute); font-variant-numeric:tabular-nums;
+  /* Today gets the only dot in the agenda, so it is findable without reading. */
+  .agenda-day.today .day-num { color:var(--accent-ink); }
+  .today-dot {
+    position:absolute; left:-10px; top:11px; width:5px; height:5px;
+    border-radius:var(--r-pill); background:var(--accent);
   }
-  #clock.live { color:var(--brand); }
-
-  /* Meters are diagnostics. Mono labels, hairline tracks, nothing shouting. */
-  .meters { display:flex; gap:20px; padding:0 16px 14px; flex:none; }
-  .meter { display:flex; align-items:center; gap:9px; flex:1; }
-  .meter .tag {
-    font:400 10px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase;
-    color:var(--mute); width:34px; flex:none;
-  }
-  .bar { flex:1; height:2px; background:var(--hairline); overflow:hidden; }
-  .bar i { display:block; height:100%; width:0; transition:width .09s linear; }
-  .m-you .bar i { background:var(--ink); }
-  .m-them .bar i { background:var(--slate-soft); }
-  .meter .secs {
-    font:400 10px/1 var(--mono); color:var(--mute); width:28px; text-align:right;
-    flex:none; font-variant-numeric:tabular-nums;
-  }
-
-  /* ----------------------------------------------------------------- notes */
-  .sheet { flex:1; min-height:0; padding:0 16px; display:flex; }
-  #notes {
-    flex:1; width:100%; resize:none; outline:none;
-    background:var(--canvas); color:var(--ink-soft);
-    border:1px solid var(--hairline-strong); border-radius:var(--r-xs);
-    padding:16px; font:400 15px/1.68 var(--sans);
-  }
-  #notes:focus { border-color:var(--mute); }
-  #notes::placeholder { color:var(--ash); }
-
-  .actions { display:flex; gap:8px; align-items:center; padding:14px 16px; flex:none; }
-  .actions #write { flex:1; justify-content:center; }
-  select.prov {
-    background:var(--canvas); color:var(--ink-soft); border:1px solid var(--hairline-strong);
-    border-radius:var(--r-md); height:36px; padding:0 9px;
-    font:500 12.5px/1 var(--sans); outline:none; cursor:pointer;
-  }
-  select.prov:hover { color:var(--ink); border-color:var(--mute); }
-  select.prov:focus { border-color:var(--link); }
-
-  /* -------------------------------------------------------------- meetings */
-  .searchbar { padding:16px 16px 12px; flex:none; display:flex; gap:8px; }
-  #q {
-    flex:1; background:var(--canvas); color:var(--ink-soft);
-    border:1px solid var(--hairline-strong); border-radius:var(--r-xs);
-    height:38px; padding:0 12px; font:400 14px var(--sans); outline:none;
-  }
-  #q:focus { border-color:var(--mute); }
-  #q::placeholder { color:var(--ash); }
-
-  .split { flex:1; min-height:0; display:flex; border-top:1px solid var(--hairline); }
-  .list {
-    width:208px; flex:none; overflow-y:auto; background:var(--canvas-sunk);
-    border-right:1px solid var(--hairline);
-  }
-  .row {
-    padding:12px 14px; cursor:pointer; display:grid; gap:5px;
-    border-bottom:1px solid var(--hairline); border-left:2px solid transparent;
-  }
-  .row:hover { background:var(--canvas-paper); }
-  .row.on { background:var(--canvas); border-left-color:var(--brand); }
-  .row .t {
-    font:500 14px/1.3 var(--sans); letter-spacing:-0.014em; color:var(--ink);
+  .agenda-events { display:flex; flex-direction:column; gap:9px; min-width:0; }
+  .event { display:grid; grid-template-columns:2px minmax(0,1fr); gap:10px; min-width:0; }
+  /* The rule is its own element rather than a border so it can hold the tone
+     colour without the row inheriting it. */
+  .event-rule { border-radius:var(--r-pill); background:var(--tone-ink, var(--accent-soft)); }
+  .event-body { display:flex; flex-direction:column; gap:2px; min-width:0; padding:1px 0; }
+  .event-title-line { display:flex; align-items:baseline; gap:7px; min-width:0; }
+  .event-title {
+    font:500 14px/1.35 var(--sans); color:var(--ink);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  .row .m {
-    font:400 10px/1.4 var(--mono); color:var(--mute); display:flex;
-    align-items:center; gap:7px; letter-spacing:.02em;
+  .now-label {
+    flex:none; font:500 10px/1 var(--sans); color:var(--accent-ink);
+    text-transform:uppercase; letter-spacing:.08em;
   }
-  .pip { width:6px; height:6px; border-radius:var(--r-full); flex:none; }
-  .p-wr { background:var(--success); }
-  .p-tx { background:var(--slate-soft); }
-  .p-no { background:transparent; border:1px solid var(--ash); }
-  .snip { font:400 11.5px/1.5 var(--sans); color:var(--mute); }
-  .snip b { color:var(--ink); font-weight:500; }
+  .event-time, .note-time {
+    font:400 11px/1.4 var(--mono); color:var(--ink-3);
+    font-variant:all-small-caps; letter-spacing:.04em; font-variant-numeric:tabular-nums;
+  }
+  .agenda-empty { padding:14px 16px; color:var(--ink-3); }
+  .agenda-empty.link {
+    display:block; width:100%; text-align:left; border:none; background:none;
+    font:400 14px/1.5 var(--sans); border-radius:var(--r-card); cursor:pointer;
+  }
+  .agenda-empty.link:hover { color:var(--ink-2); background:var(--surface); }
 
-  .detail { flex:1; min-width:0; display:flex; flex-direction:column; background:var(--canvas); }
-  .dhead { padding:20px 22px 12px; flex:none; }
-  .dhead h2 {
-    margin:0 0 6px; font:500 26px/1.1 var(--sans); letter-spacing:-0.026em; color:var(--ink);
+  /*
+   * #noteList markup from home.js:
+   *   .note-day > .note-day-label ("Today"), then
+   *   .note-row > (.tile, .note-body > (.note-title, .note-sub), .note-time)
+   */
+  #noteList { margin-top:26px; }
+  .note-day-label {
+    font:500 12px/1 var(--sans); color:var(--ink-3); padding:0 10px; margin:18px 0 6px;
   }
-  .dhead .sub {
-    font:400 10.5px/1.5 var(--mono); color:var(--mute);
-    letter-spacing:.05em; text-transform:uppercase;
+  .note-row {
+    display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
+    gap:12px; padding:7px 10px; border-radius:8px; cursor:pointer;
   }
-  .dacts { display:flex; gap:8px; flex-wrap:wrap; padding:0 22px 16px; flex:none; }
-  .dtabs { display:flex; gap:0; padding:0 22px; border-bottom:1px solid var(--hairline); flex:none; }
-  .dtabs button {
-    background:none; border:none; border-bottom:2px solid transparent; cursor:pointer;
-    color:var(--mute); font:600 11px/1 var(--sans); letter-spacing:.07em;
-    text-transform:uppercase; padding:10px 2px; margin-right:20px;
+  .note-row:hover, .note-row:focus-visible { background:var(--rail-hover); outline:none; }
+  .tile {
+    width:32px; height:32px; border-radius:8px;
+    background:var(--tone-bg, var(--accent-soft)); color:var(--tone-ink, #fff);
+    font:600 14px/32px var(--sans); text-align:center; text-transform:uppercase;
   }
-  .dtabs button:hover { color:var(--ink-soft); }
-  .dtabs button.on { color:var(--ink); border-bottom-color:var(--brand); }
-  .dbody { flex:1; min-height:0; overflow-y:auto; padding:22px; }
+  .note-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .note-title {
+    font:600 14px/1.3 var(--sans); color:var(--ink);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .note-sub {
+    font:400 12.5px/1.3 var(--sans); color:var(--ink-3);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .list-empty { padding:18px 10px; color:var(--ink-3); }
+  .note-snip { font:400 12px/1.4 var(--sans); color:var(--ink-3); grid-column:2 / -1; margin-top:-4px; }
+  .note-snip b { color:var(--ink); font-weight:500; }
 
-  .dbody .doc { max-width:68ch; font:400 15px/1.62 var(--sans); color:var(--ink-soft); }
-  .dbody .doc h2, .dbody .doc h3, .dbody .doc h4, .dbody .doc h5 {
-    font-family:var(--sans); font-weight:500; color:var(--ink);
-    letter-spacing:-0.02em; margin:28px 0 9px; line-height:1.13;
+  #askBar .barInner { padding:12px var(--gutter) 16px; }
+  .askInner {
+    flex:1; display:flex; align-items:center; gap:6px; height:44px;
+    padding:0 6px 0 14px; border:1px solid var(--hairline); border-radius:var(--r-card);
+    background:var(--surface-raised);
   }
-  .dbody .doc > :first-child { margin-top:0; }
-  .dbody .doc h2 { font-size:21px; }
-  .dbody .doc h3 { font-size:17px; }
-  .dbody .doc h4, .dbody .doc h5 { font-size:15px; }
-  .dbody .doc p { margin:0 0 14px; }
-  .dbody .doc ul, .dbody .doc ol { margin:0 0 14px; padding-left:20px; }
-  .dbody .doc li { margin-bottom:6px; }
-  .dbody .doc li::marker { color:var(--ash); }
-  .dbody .doc strong { color:var(--ink); font-weight:500; }
-  .dbody .doc a { color:var(--link); }
-  .dbody .doc code {
-    font:0.87em var(--mono); background:var(--canvas-paper);
-    padding:.12em .38em; border-radius:var(--r-xs); color:var(--ink-soft);
+  .askInner svg { color:var(--ink-3); }
+  #ask {
+    flex:1; min-width:0; height:100%; border:none; background:none; padding:0 8px;
+    font:400 14px/1 var(--sans); color:var(--ink); outline:none;
   }
-  .dbody .doc blockquote {
-    margin:0 0 14px; padding-left:14px; border-left:2px solid var(--hairline-strong); color:var(--mute);
-  }
-  .dbody .doc hr { border:none; border-top:1px solid var(--hairline); margin:24px 0; }
+  #ask::placeholder { color:var(--ink-3); }
 
-  /* Transcript: a technical document. Mono eyebrows do the structural work. */
-  .dbody .doc.script { max-width:76ch; }
-  .dbody .doc.script .line {
-    margin:0 0 10px; display:grid; grid-template-columns:64px 46px 1fr; gap:12px;
-    font-size:14px; line-height:1.6;
+  /* ------------------------------------------------------------------- note */
+  .col.note { display:flex; flex-direction:column; }
+  #noteHeader { flex:none; padding:4px 0 10px; }
+  #noteTitle {
+    width:100%; border:none; background:transparent; padding:0; outline:none;
+    font:400 26px/1.2 var(--serif); color:var(--ink); letter-spacing:-0.005em;
   }
-  .dbody .doc.script .ts {
-    font:400 10.5px/2 var(--mono); color:var(--ash); font-variant-numeric:tabular-nums;
+  #noteTitle::placeholder { color:var(--ink-3); }
+  /* #noteMeta chips are emitted by record.js as span.chip */
+  #noteMeta { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; min-height:0; }
+  .chip {
+    display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 9px;
+    border:1px solid var(--hairline); border-radius:var(--r-pill);
+    background:var(--surface-raised); color:var(--ink-2);
+    font:400 11.5px/1 var(--sans); white-space:nowrap;
   }
-  .dbody .doc.script .who {
-    font:400 10px/2.1 var(--mono); letter-spacing:.08em; text-transform:uppercase;
-  }
-  .dbody .doc.script .who.you  { color:var(--ink); }
-  .dbody .doc.script .who.them { color:var(--slate-soft); }
+  .chip.accent { color:var(--accent-ink); border-color:var(--accent-soft); }
 
-  .dbody .empty { color:var(--mute); font-size:14px; line-height:1.65; max-width:54ch; }
-  .dbody .empty b { color:var(--ink); font-weight:500; }
-  .dbody textarea {
-    width:100%; min-height:240px; margin-top:14px; resize:vertical;
-    background:var(--canvas); color:var(--ink-soft);
-    border:1px solid var(--hairline-strong); border-radius:var(--r-xs);
-    padding:14px; font:400 14px/1.6 var(--sans); outline:none;
+  #notes {
+    flex:1; min-height:220px; width:100%; resize:none; outline:none; border:none;
+    background:transparent; color:var(--ink); padding:6px 0 16px;
+    font:400 15px/1.68 var(--sans);
   }
-  .dbody textarea:focus { border-color:var(--mute); }
+  #notes::placeholder { color:var(--ink-3); }
 
-  /* ---------------------------------------------------------------- footer */
-  footer {
-    padding:0 16px; flex:none; height:40px; display:flex; align-items:center;
-    border-top:1px solid var(--hairline); background:var(--canvas);
+  #writeRow {
+    flex:none; display:flex; align-items:center; gap:8px; padding:12px 0;
+    border-top:1px solid var(--hairline);
   }
+  #writeRow #openFolder { margin-left:auto; }
+
+  /* Rendered markdown, for write-ups and read-mode notes via md.js. */
+  .doc { font:400 15px/1.62 var(--sans); color:var(--ink); }
+  .doc h2, .doc h3, .doc h4 { font-weight:500; letter-spacing:-0.02em; margin:24px 0 8px; line-height:1.15; }
+  .doc > :first-child { margin-top:0; }
+  .doc h2 { font-size:21px; } .doc h3 { font-size:17px; } .doc h4 { font-size:15px; }
+  .doc p { margin:0 0 12px; }
+  .doc ul, .doc ol { margin:0 0 12px; padding-left:20px; }
+  .doc li { margin-bottom:5px; }
+  .doc li::marker { color:var(--ink-3); }
+  .doc strong { font-weight:600; }
+  .doc a { color:var(--accent-ink); }
+  .doc code { font:0.87em var(--mono); background:var(--surface-sunken); padding:.12em .38em; border-radius:4px; }
+  .doc blockquote { margin:0 0 12px; padding-left:12px; border-left:2px solid var(--hairline); color:var(--ink-2); }
+  .doc hr { border:none; border-top:1px solid var(--hairline); margin:20px 0; }
+
+  /* ------------------------------------------------------------- transcript */
+  #transcriptPanel {
+    flex:none; display:flex; flex-direction:column; max-height:46%; min-height:160px;
+    margin-bottom:12px; overflow:hidden;
+  }
+  .panelHead {
+    flex:none; display:flex; align-items:center; gap:8px; height:40px;
+    padding:0 12px; border-bottom:1px solid var(--hairline);
+  }
+  .panelHead .panelTitle { font:600 12.5px/1 var(--sans); color:var(--ink); }
+  .liveDot {
+    display:none; width:7px; height:7px; border-radius:var(--r-pill); background:var(--danger);
+    animation:pulse 1.3s ease-in-out infinite;
+  }
+  #transcriptPanel.live .liveDot { display:inline-block; }
+  .panelHead #copyTranscript { margin-left:auto; }
+
+  /*
+   * Bubbles. The rule comes from Granola's own documentation of its transcript:
+   * "them" is the system audio and sits left in grey; "you" is the microphone
+   * and sits right in a green tint. renderBubbles/appendBubble emit
+   *   .bubble.you|.them(.first) > (.who, .text, .ts)
+   * .who only on the first bubble of a run; .ts is the mono timestamp on hover.
+   */
+  #bubbles {
+    flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px;
+    padding:12px 12px 8px;
+  }
+  .bubble {
+    position:relative; max-width:78%; padding:8px 12px; border-radius:12px;
+    font:400 14px/1.45 var(--sans); color:var(--ink); overflow-wrap:anywhere;
+  }
+  .bubble.them { align-self:flex-start; background:var(--them-bubble); border-bottom-left-radius:4px; }
+  .bubble.you { align-self:flex-end; background:var(--you-bubble); border-bottom-right-radius:4px; }
+  .bubble.first { margin-top:6px; }
+  .bubble .who { display:block; font:600 10.5px/1 var(--sans); color:var(--ink-3); margin-bottom:4px; letter-spacing:.02em; }
+  .bubble .ts {
+    position:absolute; top:50%; transform:translateY(-50%); opacity:0; pointer-events:none;
+    font:400 10px/1 var(--mono); color:var(--ink-3); white-space:nowrap;
+    font-variant-numeric:tabular-nums; transition:opacity .12s;
+  }
+  .bubble.them .ts { left:calc(100% + 8px); }
+  .bubble.you .ts { right:calc(100% + 8px); }
+  .bubble:hover .ts { opacity:1; }
+  #bubbles .empty { padding:8px 4px; font-size:13px; }
+
+  /* ---------------------------------------------------------------- noteBar */
+  #recBtn {
+    display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 16px;
+    border:1px solid var(--accent); border-radius:var(--r-pill);
+    background:var(--accent); color:#fff; font:600 13px/1 var(--sans);
+    transition:background .12s, color .12s, border-color .12s;
+  }
+  #recBtn:hover { background:#4f6100; border-color:#4f6100; }
+  #recBtn .dot { width:8px; height:8px; border-radius:var(--r-pill); background:currentColor; }
+  #clock { font:500 12.5px/1 var(--mono); font-variant-numeric:tabular-nums; }
+  #recBtn:not(.rec-on) #clock { display:none; }
+  /* Recording is a warning state, not a brand moment: tinted, not filled. */
+  #recBtn.rec-on {
+    background:var(--danger-soft); color:var(--danger); border-color:rgba(194,65,12,.35);
+  }
+  #recBtn.rec-on:hover { background:#f2d6c8; }
+  #recBtn.rec-on .dot { animation:pulse 1.3s ease-in-out infinite; }
+
+  /*
+   * Level bars. record.js sets --lvl (0 to 1) on each .cluster; the bars in a
+   * cluster scale by different factors so one number reads as a dancing group.
+   * Left cluster is them, right cluster is you, matching the bubble sides.
+   */
+  #levelBars { display:flex; align-items:center; gap:14px; height:24px; padding:0 4px; }
+  #levelBars .cluster { display:flex; align-items:center; gap:3px; height:22px; }
+  #levelBars i {
+    display:block; width:3px; height:22px; border-radius:2px;
+    transform-origin:center; transform:scaleY(min(1, calc(0.1 + var(--lvl, 0) * var(--k, 1))));
+    transition:transform 90ms linear;
+  }
+  #levelBars .them i { background:var(--accent-soft); }
+  #levelBars .you i { background:var(--accent-ink); }
+  #levelBars i:nth-child(1) { --k:.45; } #levelBars i:nth-child(2) { --k:.8; }
+  #levelBars i:nth-child(3) { --k:1; }   #levelBars i:nth-child(4) { --k:.7; }
+  #levelBars i:nth-child(5) { --k:.4; }
+  #noteBar:not(.rec-on) #levelBars { opacity:.35; }
+
   #status {
-    font:400 10.5px/1.5 var(--mono); color:var(--mute); flex:1;
-    letter-spacing:.03em;
+    flex:1; min-width:0; text-align:right; font:400 11px/1.4 var(--mono); color:var(--ink-3);
+    letter-spacing:.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  #status.warn { color:var(--error); }
-  #status.good { color:#2a9d5c; }
+  #status.warn { color:var(--danger); }
+  #status.good { color:var(--accent-ink); }
+
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+  @media (prefers-reduced-motion: reduce) {
+    #recBtn.rec-on .dot, .liveDot { animation:none; }
+    #levelBars i { transition:none; }
+  }
+
+  /* --------------------------------------------------------------- settings */
+  .group { padding:4px 16px 14px; margin-bottom:14px; }
+  .group h2 { margin:12px 0 4px; font:600 13px/1.4 var(--sans); color:var(--ink); }
+  .group .lede { margin:0 0 6px; font-size:13px; color:var(--ink-3); }
+  .field { padding:10px 0; display:flex; flex-direction:column; gap:6px; }
+  .field + .field { border-top:1px solid var(--hairline); }
+  .field label, .field .label { font:500 13px/1.3 var(--sans); color:var(--ink); }
+  .field .help { font:400 12px/1.5 var(--sans); color:var(--ink-3); margin:0; }
+  .field .help b { color:var(--ink-2); font-weight:500; }
+  .fieldRow { display:flex; align-items:center; gap:8px; }
+  .fieldRow input { flex:1; min-width:0; font-family:var(--mono); font-size:12.5px; }
+  .fieldRow .result { font:400 12px/1 var(--mono); color:var(--ink-3); white-space:nowrap; }
+  .fieldRow .result.good { color:var(--accent-ink); }
+  .fieldRow .result.warn { color:var(--danger); }
+  .check { display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .check input { width:15px; height:15px; margin:0; accent-color:var(--accent); }
+  .kv { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:8px 0; align-items:baseline; }
+  .kv + .kv { border-top:1px solid var(--hairline); }
+  .kv .k { font:400 12.5px/1.5 var(--sans); color:var(--ink-3); }
+  .kv .v { font:400 12.5px/1.5 var(--mono); color:var(--ink-2); overflow-wrap:anywhere; }
+  .kv .v a { color:var(--accent-ink); }
+  .kv .v.row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 </style>
 </head>
 <body>
 
-<header class="top">
-  <span class="wordmark">MIN</span>
-  <nav class="tabs">
-    <button id="tabRec" class="on">Notes</button>
-    <button id="tabLib">Meetings</button>
-  </nav>
-  <span class="spacer"></span>
-  <label class="pin" title="Keep this window above your call">
-    <input type="checkbox" id="ontop" checked> on top
-  </label>
-</header>
+<div class="shell">
+  <aside id="rail">
+    <button id="searchPill" title="Search notes and transcripts">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+      <span>Search</span>
+      <kbd>Ctrl K</kbd>
+    </button>
 
-<!-- ────────────────────────────── notes ────────────────────────────── -->
-<section class="view" id="viewRec">
-  <div class="transport">
-    <input id="title" placeholder="Untitled meeting" autocomplete="off">
-    <span id="clock">00:00</span>
-    <button id="rec" class="btn brand"><span class="dot"></span>Record</button>
-    <button id="stopBtn" class="btn" disabled>Stop</button>
-  </div>
+    <nav>
+      <button id="navHome" class="railItem on">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5h-3v-4H6v4H3a.5.5 0 0 1-.5-.5z"/></svg>
+        Home
+      </button>
+      <div class="railLabel">Spaces</div>
+      <button id="navNotes" class="railItem">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+        My notes
+      </button>
+    </nav>
 
-  <div class="meters">
-    <div class="meter m-you">
-      <span class="tag">You</span>
-      <span class="bar"><i id="micLvl"></i></span>
-      <span class="secs" id="micVal"></span>
+    <div class="railSpacer"></div>
+
+    <button id="navSettings" class="railItem">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2"/></svg>
+      Settings
+    </button>
+
+    <div id="workspace">
+      <span class="tile">M</span>
+      <span class="wm">MIN</span>
+      <span id="appVersion"></span>
     </div>
-    <div class="meter m-them">
-      <span class="tag">Them</span>
-      <span class="bar"><i id="sysLvl"></i></span>
-      <span class="secs" id="sysVal"></span>
+  </aside>
+
+  <main id="content">
+    <div id="topbar">
+      <button id="newNote" class="btn ghost">+ New note</button>
     </div>
-  </div>
 
-  <div class="sheet">
-    <textarea id="notes" spellcheck="true"
-      placeholder="Type as the meeting goes. Fragments are fine: half sentences, a heading, a name with a question mark.&#10;&#10;Use # for headings. They become the sections of your write-up.&#10;&#10;These notes are the skeleton. Nothing rewrites them."></textarea>
-  </div>
+    <!-- ──────────────────────────── home ──────────────────────────── -->
+    <section class="view" id="viewHome">
+      <div class="col">
+        <h1 class="display">Coming up</h1>
+        <section id="comingUp" class="card">
+          <p class="empty">Nothing on your calendar</p>
+        </section>
+        <section id="noteList"></section>
+      </div>
+      <div id="askBar" class="bar">
+        <div class="barInner">
+          <div class="askInner">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+            <input id="ask" type="search" placeholder="Search notes and transcripts" autocomplete="off" spellcheck="false">
+            <button id="listTodos" class="btn ghost sm" title="Open the newest note">Recent</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
-  <div class="actions hide" id="after">
-    <button id="write" class="btn primary">Write up with</button>
-    <select id="provider" class="prov" title="Which assistant to open"></select>
-    <button id="openRec" class="btn sm">Folder</button>
-  </div>
-</section>
+    <!-- ──────────────────────────── note ──────────────────────────── -->
+    <section class="view hide" id="viewNote">
+      <div class="col note">
+        <div id="noteHeader">
+          <input id="noteTitle" type="text" placeholder="New note" autocomplete="off" spellcheck="false">
+          <div id="noteMeta"></div>
+        </div>
 
-<!-- ───────────────────────────── meetings ──────────────────────────── -->
-<section class="view hide" id="viewLib">
-  <div class="searchbar">
-    <input id="q" placeholder="Search everything you have said and heard" autocomplete="off">
-    <button id="clearQ" class="btn sm">Clear</button>
-  </div>
-  <div class="split">
-    <div class="list" id="list"></div>
-    <div class="detail" id="detail">
-      <div class="dbody"><p class="empty">Select a meeting.</p></div>
-    </div>
-  </div>
-</section>
+        <textarea id="notes" spellcheck="true"
+          placeholder="Type as the meeting goes. Fragments are fine: half sentences, a heading, a name with a question mark.&#10;&#10;Use # for headings. They become the sections of your write-up.&#10;&#10;These notes are the skeleton. Nothing rewrites them."></textarea>
 
-<footer><span id="status">Ready.</span></footer>
+        <section id="writeRow">
+          <button id="write" class="btn primary">Write up with</button>
+          <select id="provider" title="Which assistant to open">
+            <option value="claude">Claude</option>
+            <option value="chatgpt">ChatGPT</option>
+            <option value="gemini">Gemini</option>
+            <option value="copilot">Copilot</option>
+            <option value="perplexity">Perplexity</option>
+            <option value="grok">Grok</option>
+            <option value="mistral">Le Chat</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="">Clipboard only</option>
+          </select>
+          <button id="openFolder" class="btn ghost sm">Folder</button>
+        </section>
+
+        <aside id="transcriptPanel" class="card hide">
+          <div class="panelHead">
+            <span class="panelTitle">Transcript</span>
+            <span class="liveDot" aria-hidden="true"></span>
+            <button id="copyTranscript" class="btn ghost sm">Copy</button>
+          </div>
+          <div id="bubbles"></div>
+        </aside>
+      </div>
+
+      <div id="noteBar" class="bar">
+        <div class="barInner">
+          <button id="recBtn" title="Start recording">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="label">Record</span>
+            <span id="clock">00:00</span>
+          </button>
+          <div id="levelBars" aria-hidden="true">
+            <span class="cluster them"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="cluster you"><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <button id="toggleTranscript" class="btn ghost icon" title="Show the transcript">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 8h1M4.5 5.5v5M7 3v10M9.5 6v4M12 4.5v7M14 8h.5"/></svg>
+          </button>
+          <span id="status">Ready.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────────────────────── settings ────────────────────────── -->
+    <section class="view hide" id="viewSettings">
+      <div class="col">
+        <h1 class="display">Settings</h1>
+
+        <section class="card group">
+          <h2>Calendar</h2>
+          <p class="lede">Upcoming meetings appear on Home and name your notes for you.</p>
+          <div class="field">
+            <label for="calendarUrl">Secret iCal address</label>
+            <div class="fieldRow">
+              <input id="calendarUrl" type="url" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" autocomplete="off" spellcheck="false">
+              <button id="calendarTest" class="btn sm">Test connection</button>
+              <span id="calendarTestResult" class="result"></span>
+            </div>
+            <p class="help">In Google Calendar: <b>Settings</b> &gt; your calendar &gt; <b>"Secret address in iCal format"</b>. The address is read on this machine only and never leaves it.</p>
+          </div>
+          <div class="field">
+            <label for="calendarRefresh">Refresh every</label>
+            <div class="fieldRow">
+              <select id="calendarRefresh">
+                <option value="5">5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="card group">
+          <h2>Recording</h2>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="liveTranscript"> Show the conversation while recording</label>
+            <p class="help">Transcribes on this machine as you go. Off, and the transcript is written after you stop.</p>
+          </div>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="alwaysOnTop"> Keep window on top while recording</label>
+          </div>
+        </section>
+
+        <section class="card group">
+          <h2>Write-up</h2>
+          <div class="field">
+            <label for="defaultProvider">Open write-ups with</label>
+            <div class="fieldRow">
+              <select id="defaultProvider">
+                <option value="claude">Claude</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="gemini">Gemini</option>
+                <option value="copilot">Copilot</option>
+                <option value="perplexity">Perplexity</option>
+                <option value="grok">Grok</option>
+                <option value="mistral">Le Chat</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="">Clipboard only</option>
+              </select>
+            </div>
+            <p class="help">The prompt is copied to your clipboard and the assistant opens in your browser. No keys, nothing to revoke.</p>
+          </div>
+        </section>
+
+        <section class="card group">
+          <h2>About</h2>
+          <div class="kv"><span class="k">Version</span><span class="v" id="aboutVersion"></span></div>
+          <div class="kv"><span class="k">Notes folder</span><span class="v row"><span id="meetingsDirPath"></span><button id="openMeetingsDir" class="btn sm">Open folder</button></span></div>
+          <div class="kv"><span class="k">Source</span><span class="v"><a href="https://github.com/joshuakeum9-cell/min" target="_blank" rel="noopener">github.com/joshuakeum9-cell/min</a></span></div>
+          <div class="kv"><span class="k">Licences</span><span class="v"><a href="https://github.com/joshuakeum9-cell/min/blob/main/THIRD-PARTY-LICENSES.md" target="_blank" rel="noopener">Third-party licences</a></span></div>
+        </section>
+      </div>
+    </section>
+  </main>
+</div>
 
 <script type="module" src="./renderer.js"></script>
 </body>
