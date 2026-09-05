@@ -966,7 +966,11 @@ ipcMain.handle('calendar-event-now', () => calendar.eventNow());
  * meeting they meant to record is actually starting.
  */
 const NOTIFY_WIDTH = 320;
-const NOTIFY_HEIGHT = 118;
+// Measured in the running window rather than guessed: #card lays out at 137,
+// and this was 118, which cut off the bottom of the Take notes button. The
+// window has to fit the card, not the other way round, because squeezing the
+// card to a round number is what produced a clipped button in the first place.
+const NOTIFY_HEIGHT = 137;
 const NOTIFY_MARGIN = 16;
 // Long enough to notice on the way back from a coffee, short enough that a
 // meeting you ignored stops nagging.
@@ -1036,7 +1040,11 @@ function sendNotifyMeeting() {
     title: String(notifyEvent.title ?? '').slice(0, 200),
     start: notifyEvent.start ?? null,
     end: notifyEvent.end ?? null,
-    startsInMs: Number.isFinite(startMs) ? startMs - Date.now() : 0,
+    // null, not 0, when the start will not parse: 0 is a real offset meaning
+    // "starting exactly now", which is the common case, and notify.js reads it
+    // as one. Number.isFinite(null) is false, so the page falls back to the
+    // event's own start and then to an empty line.
+    startsInMs: Number.isFinite(startMs) ? startMs - Date.now() : null,
   });
 }
 

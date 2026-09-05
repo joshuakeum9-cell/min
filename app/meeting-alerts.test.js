@@ -136,6 +136,15 @@ eq(
   eq('a global skipTitles refuses the first time', isAlertable(daily, { skipTitles: sticky }), false);
   eq('and refuses the second time too', isAlertable(daily, { skipTitles: sticky }), false);
   eq('the caller regex is left unmoved', sticky.lastIndex, 0);
+
+  // /y is the flag the three checks above cannot see. Rebuilding the regex is
+  // enough to defeat /g, so those pass whether or not the flags are stripped,
+  // but /y anchors the match at lastIndex even on a brand new regex: kept, it
+  // would stop matching a title whose muted word is not the first one, and nudge
+  // about the standup the user muted.
+  const anchored = /standup/y;
+  eq('a sticky skipTitles still refuses a match mid-title', isAlertable(daily, { skipTitles: anchored }), false);
+  eq('and it too is left unmoved', anchored.lastIndex, 0);
 }
 eq(
   'a skipTitles that is not a regex is ignored, not guessed at',
@@ -258,7 +267,13 @@ eq('a Date now works', idOf(pendingAlert([ev('ev_1', 30 * SECOND)], new Date(NOW
 eq('an epoch now works', idOf(pendingAlert([ev('ev_1', 30 * SECOND)], NOW)), 'ev_1');
 eq('junk options are ignored', idOf(pendingAlert([ev('ev_1', 30 * SECOND)], NOW, null)), 'ev_1');
 eq('junk window sizes fall back to the defaults', idOf(pendingAlert([ev('ev_1', 30 * SECOND)], NOW, { leadMs: 'soon', graceMs: NaN })), 'ev_1');
-eq('a negative leadMs is read as zero, not as the past', pendingAlert([ev('ev_1', 1)], NOW, { leadMs: -5 * MINUTE }), null);
+// A leadMs of minus five minutes left unclamped would drop a meeting one
+// millisecond out too, so that check alone says nothing about which of the two
+// happened. The start instant is where the readings part: clamped to zero it is
+// still inside the window, read as the past it is five minutes outside it.
+eq('a negative leadMs drops a meeting that has not started', pendingAlert([ev('ev_1', 1)], NOW, { leadMs: -5 * MINUTE }), null);
+eq('but is read as zero, not as the past', idOf(pendingAlert([ev('ev_now', 0)], NOW, { leadMs: -5 * MINUTE })), 'ev_now');
+eq('and a negative graceMs is read as zero as well', idOf(pendingAlert([ev('ev_on', 0)], NOW, { graceMs: -5 * MINUTE })), 'ev_on');
 eq(
   'junk entries are stepped over, not thrown on',
   idOf(pendingAlert(GARBAGE.concat([ev('ev_real', 20 * SECOND)]), NOW)),
@@ -289,7 +304,26 @@ eq(
   nextWakeMs([ev('ev_1', 30 * SECOND)], NOW),
   60 * SECOND,
 );
+// The cut is at exactly zero, and these two are the millisecond either side of
+// it. On the tick the lead moment lands, pendingAlert is already answering for
+// that meeting, so a five second wake would only ask the question again; one
+// millisecond before it, there is still something left to wait for.
+eq(
+  'a lead moment landing on this very tick is not waited for either',
+  nextWakeMs([ev('ev_1', 60 * SECOND)], NOW),
+  60 * SECOND,
+);
+eq(
+  'and one millisecond short of it is waited for, at the floor',
+  nextWakeMs([ev('ev_1', 60 * SECOND + 1)], NOW),
+  5 * SECOND,
+);
 eq('nor is a meeting already under way', nextWakeMs([ev('ev_1', -2 * MINUTE)], NOW), 60 * SECOND);
+// The same rule from both ends: the wait is measured to the lead moment, never
+// to the start, so a meeting seconds away is not a sleep of seconds, and one a
+// year away is not a sleep of a year.
+eq('a meeting three milliseconds away is not a three millisecond sleep', nextWakeMs([ev('ev_1', 3)], NOW), 60 * SECOND);
+eq('and one a year away is still only a minute', nextWakeMs([ev('ev_1', 365 * 24 * 60 * MINUTE)], NOW), 60 * SECOND);
 eq(
   'the soonest lead moment of several wins',
   nextWakeMs([ev('ev_1', 10 * MINUTE), ev('ev_2', 90 * SECOND), ev('ev_3', 5 * MINUTE)], NOW),

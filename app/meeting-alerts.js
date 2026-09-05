@@ -242,6 +242,14 @@ export function nextWakeMs(events, now, opts = {}) {
     if (soonest === null || untilLead < soonest) soonest = untilLead;
   }
 
-  if (soonest === null) return maxMs;
-  return Math.min(Math.max(soonest, minMs), maxMs);
+  /*
+   * Capped at setTimeout's own ceiling. Past 2^31-1 ms a timer fires
+   * immediately rather than late, which would turn this poll into a spin: the
+   * exact failure the clamp above exists to prevent, reached from the other
+   * end. No caller passes a maxMs today, but the contract says the number is
+   * safe to hand to setTimeout, and that has to hold for any of them.
+   */
+  const ceiling = Math.min(maxMs, 2147483647);
+  if (soonest === null) return ceiling;
+  return Math.min(Math.max(soonest, minMs), ceiling);
 }

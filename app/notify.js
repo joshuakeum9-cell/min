@@ -122,9 +122,12 @@ function send(command) {
 take.addEventListener('click', () => send('take'));
 dismiss.addEventListener('click', () => send('dismiss'));
 
-// Escape anywhere on the page, not just on the button. This window puts itself
-// in front of whatever you were doing a minute before a meeting, so the way out
-// of it should be the key you already reach for to close things.
+// Escape anywhere on the page, not just on the button. It is dead in the real
+// popup: main creates that window focusable:false so it cannot pull focus off a
+// call a minute before a meeting, and a window that cannot be focused never
+// receives a key. Kept anyway, because it is the way out of this page opened on
+// its own for styling work, and because dropping it would leave nothing to
+// catch Escape if that window ever becomes focusable.
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   e.preventDefault();
