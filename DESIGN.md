@@ -27,9 +27,10 @@ been checked against these values.
   `#788c15` writes, `--accent-soft` `#b2c248` tints and marks. Olive means captured or live:
   the Record fill, the "you" side of the transcript, today in the agenda, the mic pill while it
   runs, a good status line.
-- **Coral is identity, not state.** `--brand` `#f36458` survives in exactly one rule,
-  `#workspace .tile` (`:185-189`), the 22px wordmark tile at the foot of the rail. It marks
-  nothing and tracks nothing. That is the whole point of keeping it.
+- **No second brand mark.** Coral survives on the installer and the app icon and nowhere in
+  the interface. There was a `--brand` token feeding a 22px coral square with an "M" in it at
+  the foot of the rail, beside the word MIN. Two marks for one product read as two products,
+  so the square went and the token with it. The wordmark is the name, set bold.
 - **Recording is a warning state, not a brand moment.** `#recBtn` is olive at rest and flips to
   `--danger-soft` with `--danger` text while running (`:626-628`). It is tinted, never filled,
   because a saturated red rectangle in the bar for an hour is a fire alarm.
@@ -52,7 +53,7 @@ been checked against these values.
 
 ## Colours
 
-Seventeen tokens carry colour or alpha. Every one of the 36 is referenced somewhere outside
+Sixteen tokens carry colour or alpha. Every one of the 36 is referenced somewhere outside
 `:root`; none is dead. Reference counts are deliberately not given. Three separate passes over
 this file disagreed with each other on counting, and a count is the claim most certain to be
 stale a week from now. What a token is for is stable; how many times it happens to be written
@@ -74,7 +75,6 @@ this morning is not.
 | `--them-bubble` | `#ecece6` | 1 ref. `.bubble.them` (`:538`) |
 | `--danger` | `#c2410c` | `.liveDot` (`:518`), `#recBtn.rec-on` text (`:627`), `#status.warn` (`:664`), `.fieldRow .result.warn` (`:688`) |
 | `--danger-soft` | `#f6e2d8` | 1 ref. `#recBtn.rec-on` fill (`:627`) |
-| `--brand` | `#f36458` | 1 ref. `#workspace .tile` (`:186`). The only coral in the app |
 | `--rail-hover` | `rgba(28,28,26,.05)` | `.railItem:hover` (`:171`), `.btn.ghost:hover` (`:264`), `.note-row:hover` (`:345`) |
 | `--rail-active` | `rgba(28,28,26,.09)` | `.railItem.on, .railItem.active` (`:177`) and `.btn.icon.on` (`:267`). The second selector matches nothing the app emits, so in practice this is the rail selection alone |
 
@@ -149,7 +149,6 @@ Filled and tinted surfaces:
 | `--ink` on `--you-bubble` `#e7ecd2` | 14.1:1 |
 | `--ink` on `--them-bubble` `#ecece6` | 14.4:1 |
 | `--ink` on `--accent-soft`, `::selection` and `.bubble mark` | 8.7:1 |
-| `#fff` on `--brand` `#f36458`, the wordmark tile | 3.1:1 |
 
 Non-text, for reference: `--hairline` on `--surface` is 1.2:1, on `--surface-raised` 1.3:1, on
 `--surface-sunken` 1.2:1. `--accent-soft` on `--surface-raised` is 2.0:1. Those are borders and
@@ -192,7 +191,7 @@ with fallback stacks in `--sans`, `--mono` and `--serif`.
 |---|---|---|---|
 | Archivo | `--sans` | one variable file, `archivo-latin-wght.woff2`, 34,928 bytes, `font-weight:100 900`, `font-stretch:100%` | The interface default, set on `body` (`:132`) and restated in every `font` shorthand that is not mono or serif |
 | IBM Plex Mono | `--mono` | two static files, `ibm-plex-mono-400-latin.woff2` 14,708 bytes and `ibm-plex-mono-500-latin.woff2` 14,888 bytes | Anything measured. Weight 500 is used in exactly one rule, `#clock` (`:623`); every other mono rule is 400 |
-| Instrument Serif | `--serif` | one file, `instrument-serif-400-latin.woff2`, 21,032 bytes, weight 400 | `h1.display` (`:239`), `.day-num` (`:294`), `#noteTitle` (`:383`) |
+| Instrument Serif | `--serif` | one file, `instrument-serif-400-latin.woff2`, 21,032 bytes, weight 400 | `h1.display` and `#noteTitle`. Not the agenda numeral: that has to read as bold and this face ships at 400 only |
 
 All three are `font-style:normal` and `font-display:swap`. Weights actually called on Archivo
 are 400, 500, 600 and 700.
@@ -214,7 +213,7 @@ comparisons impossible to get wrong. Every `font-size` in the file is now one of
 | `--fs-lg` | 16px | 3 | `#notes` (`:400`), `.doc` (`:435`), `.doc h3` (`:441`). One step above interface text, so reading a write-up matches typing the notes |
 | `--fs-md` | 14px | 10 | `body` (`:132`), `.empty`, `.event-title`, `.agenda-empty.link`, `.tile`, `.note-title`, `#ask`, `#pasteNote`, `.doc h4`, `.bubble` |
 | `--fs-sm` | 13px | 18 | Controls and labels: `#searchPill`, `.railItem`, `#workspace .wm`, `.btn`, `select`/`input`, `.pasteHead`, `.doc code`, `.panelTitle`, `#transcriptSearch`, `#bubbles .empty`, `#recBtn`, `#clock`, `.group h2`, `.group .lede`, `.field label`, `.fieldRow input`, `.kv .k`, `.kv .v` |
-| `--fs-xs` | 12px | 19 | The floor: `#searchPill kbd`, `.railLabel`, `#workspace .tile`, `#appVersion`, `.btn.sm`, `.day-stack`, `.now-label`, `.event-time`, `.note-day-label`, `.note-sub`, `.note-snip`, `.chip`, `#transcriptCount`, `.consent`, `.bubble .who`, `.bubble .ts`, `#status`, `.field .help`, `.fieldRow .result` |
+| `--fs-xs` | 12px | 19 | The floor: `#searchPill kbd`, `.railLabel`, `#appVersion`, `.btn.sm`, `.day-stack`, `.now-label`, `.event-time`, `.note-day-label`, `.note-sub`, `.note-snip`, `.chip`, `#transcriptCount`, `.consent`, `.bubble .who`, `.bubble .ts`, `#status`, `.field .help`, `.fieldRow .result` |
 
 `.doc h3` sharing `--fs-lg` with body text is deliberate: weight 600 and the 24px space above
 it carry the level, not size. That is what keeps a three-level write-up from stepping down to
@@ -229,9 +228,9 @@ Four line-heights, three by role plus one flat:
 | `--lh-body` | 1.5 | 10 | Anything you read a paragraph of |
 | `--lh-ctl` | 1 | 22 | A single line centred in a box of known height. Never on wrapping text |
 
-Two hard-coded line-heights survive on purpose, each equal to its own box height so a single
-glyph centres without a flexbox: `font:700 var(--fs-xs)/22px var(--sans)` on `#workspace .tile`
-(`:188`) and `font:600 var(--fs-md)/32px var(--sans)` on `.tile` (`:350`). Both are commented.
+One hard-coded line-height survives on purpose, equal to its own box height so a single glyph
+centres without a flexbox: `font:600 var(--fs-md)/32px var(--sans)` on `.tile`, the initial
+beside a note in the list. It is commented.
 
 Letter-spacing is set in eleven places and never tokenised: `-0.01em` on `h1.display`,
 `-0.005em` on `#noteTitle`, `-0.02em` on `.doc` headings, `.08em` on `.now-label`, `.04em` on
@@ -255,7 +254,7 @@ rail at `12px 10px 10px`, and `#topbar` at `0 20px`. Gaps run 1px, 2px, 3px, 5px
 
 | Radius | Value | Uses | Where |
 |---|---|---|---|
-| `--r-ctl` | 6px | 3 | `#workspace .tile` (`:186`), `.btn` (`:251`), `select`/`input` (`:271`) |
+| `--r-ctl` | 6px | `.btn`, `select`/`input` |
 | `--r-card` | 12px | 5 | `.card` (`:244`), `.agenda-empty.link` (`:328`), `.askInner` (`:368`), `#pasteNote` (`:423`), `.panelInner` (`:478`) |
 | `--r-pill` | 999px | 10 | `#searchPill`, `.btn.primary`, `.today-dot`, `.event-rule`, `.chip`, `#transcriptSearch`, `.liveDot`, `#micPill`, `#recBtn`, `#recBtn .dot` |
 
@@ -290,7 +289,6 @@ loses the wide meter rather than truncating the status line. There is no
 | `.railLabel` | none | `--ink-3` | none | `--fs-xs` 500, `14px 10px 6px` | none |
 | `.railItem` | none | `--ink-2` | 8px | `--row`, `0 10px`, 9px gap | none |
 | `.railItem.active` | `--rail-active` | `--ink` | 8px | same | none |
-| `#workspace .tile` | `--brand` | `#fff` 700 | `--r-ctl` | 22px square | none |
 | `#topbar` | inherit | inherit | 0 | 48px tall, `0 20px`, right-aligned | none |
 | `.col` | none | inherit | 0 | `calc(--col + 2 * --gutter)`, `0 --gutter 24px` | none |
 | `.view > .bar` | `--surface` | inherit | 0 | `.barInner` pads `10px --gutter` | 1px `--hairline` top |
@@ -419,8 +417,9 @@ is the one value that went the other way, invented in the widget and never back-
 - **Don't add a shadow.** There are none in either file, and one would look imported.
 - **Don't introduce a second accent hue.** Olive means captured or live. A second colour makes
   colour ordinary.
-- **Don't reuse `--brand` for anything.** It is one tile. The moment coral marks a state, both
-  meanings are gone.
+- **Don't bring coral back into the interface.** It lives on the installer and the app icon.
+  A second hue in the window makes olive ordinary, and a second mark makes the wordmark
+  ordinary.
 - **Don't use `--ink-3` for anything a user has to read carefully.** At 3.1:1 to 3.5:1 it is
   already carrying more than it should.
 - **Don't add a font size.** Six is the whole point. If something needs to be between 13px and
@@ -524,8 +523,7 @@ are now selectors.
 
 ### Untokenised literals
 
-19. `#fff` three times: `#workspace .tile` colour (`:188`), the `.tile` `--tone-ink` fallback
-    (`:348`), and `#recBtn` colour (`:618`). There is no white text token, even though
+19. `#fff` twice: the `.tile` `--tone-ink` fallback and `#recBtn` colour. There is no white text token, even though
     `--surface-raised` is `#ffffff` and is already used as a text colour on `.btn.primary`
     (`:259`). Two names for the same white, one of them a fill token doing a text job.
 20. `#000` twice on `.btn.primary:hover` (`:262`), a darker step past `--ink` with no token.
@@ -549,8 +547,8 @@ are now selectors.
     `kbd` rule is scoped `#searchPill kbd` (`:157`), so that one renders in the browser's
     default monospace at the browser's default size, outside the type scale.
 28. The Archivo `@font-face` comment says "One variable file carries 400, 500 and 600" (`:60`),
-    but `#workspace .tile` asks for 700 (`:188`). The comment is one weight behind the
-    stylesheet.
+    but the rail wordmark and the agenda numeral both ask for 600 or 700. The comment is one
+    weight behind the stylesheet.
 29. Eleven letter-spacing values are set inline with no token, and no rule about when tracking
     tightens. `-0.02em` on `.doc` headings and `-0.01em` on `h1.display` are the same idea at
     two values.

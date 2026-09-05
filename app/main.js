@@ -138,6 +138,25 @@ function createWindow() {
     // The renderer's --surface. Anything else flashes in the gap between the
     // window appearing and the first paint.
     backgroundColor: '#f7f7f2',
+    /*
+     * The caption is painted in the app's own ground rather than the system's.
+     * The default Windows title bar is a lighter strip across the top, which
+     * reads as a second surface sitting above the one the app actually uses.
+     * titleBarOverlay keeps the real minimise, maximise and close buttons, so
+     * nothing about window management changes; only the colour behind them
+     * does. Height matches #topbar, so the buttons sit in a band the interface
+     * already has rather than adding one.
+     *
+     * The renderer must then supply its own drag region: #topbar carries
+     * -webkit-app-region:drag, and it reserves room on the right for the
+     * buttons through env(titlebar-area-width).
+     */
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#f7f7f2',
+      symbolColor: '#55554f',
+      height: 48,
+    },
     alwaysOnTop: false,
     // sandbox is left at Electron's default, on. That constrains preload.cjs:
     // it must stay CommonJS and stay on Electron's renderer-safe exports, since

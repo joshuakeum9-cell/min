@@ -88,9 +88,6 @@
     --you-bubble:#e7ecd2; --them-bubble:#ecece6;
     --danger:#c2410c; --danger-soft:#f6e2d8;
 
-    /* Coral, kept only for the wordmark tile. Not a state colour any more. */
-    --brand:#f36458;
-
     /* Ink at low alpha, so hover and active read on any of the three grounds. */
     --rail-hover:rgba(28,28,26,.05); --rail-active:rgba(28,28,26,.09);
 
@@ -144,9 +141,12 @@
 
   #rail {
     background:var(--surface-sunken); border-right:1px solid var(--hairline);
-    display:flex; flex-direction:column; gap:2px; padding:12px 10px 10px;
+    display:flex; flex-direction:column; gap:2px; padding:14px 10px 10px;
     min-height:0;
+    /* Nothing above it any more, so the top of the rail is draggable too. */
+    -webkit-app-region:drag;
   }
+  #rail button, #rail a { -webkit-app-region:no-drag; }
   #searchPill {
     display:flex; align-items:center; gap:8px; height:var(--row); padding:0 10px;
     border-radius:var(--r-pill); border:1px solid var(--hairline);
@@ -182,12 +182,12 @@
     display:flex; align-items:center; gap:8px; padding:10px 10px 2px;
     border-top:1px solid var(--hairline); margin-top:8px;
   }
-  #workspace .tile {
-    width:22px; height:22px; border-radius:var(--r-ctl); background:var(--brand);
-    /* Line-height is the tile height so the single letter centres itself. */
-    color:#fff; font:700 var(--fs-xs)/22px var(--sans); text-align:center;
-  }
-  #workspace .wm { font:600 var(--fs-sm)/var(--lh-ctl) var(--sans); letter-spacing:.04em; color:var(--ink); }
+  /*
+   * The wordmark IS the name, set bold. There was a coral square with a single
+   * "M" in it beside the word MIN, which read as a different product's logo
+   * sitting next to this one's.
+   */
+  #workspace .wm { font:700 var(--fs-md)/var(--lh-ctl) var(--sans); letter-spacing:.06em; color:var(--ink); }
   #appVersion { margin-left:auto; font:400 var(--fs-xs)/var(--lh-ctl) var(--mono); color:var(--ink-3); }
 
   /* ---------------------------------------------------------------- content */
@@ -195,10 +195,26 @@
     display:flex; flex-direction:column; min-width:0; min-height:0;
     background:var(--surface);
   }
+  /*
+   * Also the window's drag handle. main.js hides the system title bar and
+   * paints the caption in --surface, which means this strip is the only thing
+   * left to grab the window by. The right padding clears the minimise,
+   * maximise and close buttons that Windows draws on top of it:
+   * env(titlebar-area-width) is the space left over beside them, with a
+   * literal fallback for the case where the overlay is unavailable and the
+   * variable resolves to nothing.
+   */
   #topbar {
     flex:none; height:48px; display:flex; align-items:center; justify-content:flex-end;
     padding:0 20px;
+    /* 100vw, not 100%: the bar sits in a grid cell inset by the rail, so its
+       own width is not the window's and the difference is the whole point.
+       Measured here: window 1100, titlebar-area-width 963, so the buttons
+       take 137 and the button needs to stop 12 short of them. */
+    padding-right:calc(100vw - env(titlebar-area-width, calc(100vw - 148px)) + 12px);
+    -webkit-app-region:drag;
   }
+  #topbar button { -webkit-app-region:no-drag; }
   .view { flex:1; min-height:0; display:flex; flex-direction:column; }
   /*
    * The centred column. Width is content plus gutters so the gutters shrink
@@ -288,26 +304,40 @@
    * from a hash of the title, so a meeting keeps its colour between sessions.
    */
   #comingUp { padding:4px 0; }
-  .agenda-day { display:grid; grid-template-columns:64px minmax(0,1fr); gap:14px; padding:12px 16px; }
+  /* The date column holds a full month name now, so it is wider, and the
+     row has more air on both sides. */
+  .agenda-day { display:grid; grid-template-columns:112px minmax(0,1fr); gap:16px; padding:14px 22px; }
   .agenda-day + .agenda-day { border-top:1px solid var(--hairline); }
   .day-head { display:flex; align-items:flex-start; gap:7px; position:relative; }
-  .day-num { font:400 var(--fs-xl)/var(--lh-display) var(--serif); color:var(--ink); font-variant-numeric:tabular-nums; }
+  /* Sans rather than the display serif, because the serif ships at 400 only
+     and this numeral has to read as bold. It is the thing you look at to
+     find a day. */
+  .day-num { font:600 var(--fs-display)/1 var(--sans); color:var(--ink); font-variant-numeric:tabular-nums; }
   .day-stack {
     /* Nudged so the two small lines still straddle the numeral's x-height. */
-    display:flex; flex-direction:column; gap:1px; padding-top:1px;
-    font:400 var(--fs-xs)/var(--lh-display) var(--sans); color:var(--ink-3); letter-spacing:.01em;
+    display:flex; flex-direction:column; gap:1px; padding-top:2px;
+    font:400 var(--fs-xs)/1.25 var(--sans); color:var(--ink-3); letter-spacing:.01em;
   }
   /* Today gets the only dot in the agenda, so it is findable without reading. */
   .agenda-day.today .day-num { color:var(--accent-ink); }
   .today-dot {
-    position:absolute; left:-10px; top:11px; width:5px; height:5px;
+    position:absolute; left:-12px; top:9px; width:5px; height:5px;
     border-radius:var(--r-pill); background:var(--accent);
   }
   .agenda-events { display:flex; flex-direction:column; gap:9px; min-width:0; }
-  .event { display:grid; grid-template-columns:2px minmax(0,1fr); gap:10px; min-width:0; min-height:var(--row); }
+  .event { display:grid; grid-template-columns:4px minmax(0,1fr); gap:12px; min-width:0; min-height:var(--row); }
   /* The rule is its own element rather than a border so it can hold the tone
      colour without the row inheriting it. */
-  .event-rule { border-radius:var(--r-pill); background:var(--tone-ink, var(--accent-soft)); }
+  /*
+   * A short, thick tag beside the title, not a rule down the whole row. Its
+   * height is the title line rather than the block, so two-line events do not
+   * grow a longer stripe than one-line ones, and every mark in the agenda is
+   * the same size. A full-height 2px line read as a divider between rows.
+   */
+  .event-rule {
+    border-radius:var(--r-pill); background:var(--tone-ink, var(--accent-soft));
+    align-self:start; height:20px; margin-top:2px;
+  }
   .event-body { display:flex; flex-direction:column; gap:2px; min-width:0; padding:1px 0; }
   .event-title-line { display:flex; align-items:baseline; gap:7px; min-width:0; }
   .event-title {
@@ -318,9 +348,14 @@
     flex:none; font:500 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--accent-ink);
     text-transform:uppercase; letter-spacing:.08em;
   }
+  /*
+   * No all-small-caps. It shrank the AM and PM to the height of the digits and
+   * made an already-12px stamp read smaller still, which is why these looked
+   * undersized next to every other list in the app.
+   */
   .event-time, .note-time {
-    font:400 var(--fs-xs)/var(--lh-title) var(--mono); color:var(--ink-3);
-    font-variant:all-small-caps; letter-spacing:.04em; font-variant-numeric:tabular-nums;
+    font:400 var(--fs-sm)/var(--lh-title) var(--mono); color:var(--ink-3);
+    letter-spacing:.02em; font-variant-numeric:tabular-nums;
   }
   .agenda-empty { padding:14px 16px; color:var(--ink-3); }
   .agenda-empty.link {
@@ -726,7 +761,6 @@
     </button>
 
     <div id="workspace">
-      <span class="tile">M</span>
       <span class="wm">MIN</span>
       <span id="appVersion"></span>
     </div>

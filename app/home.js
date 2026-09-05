@@ -49,7 +49,9 @@ function toneIndex(title) {
 
 /** "9:00 AM". Fixed to en-US because the contract shows this exact shape. */
 const CLOCK = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
-const MONTH_SHORT = new Intl.DateTimeFormat('en-US', { month: 'short' });
+// Written out, not abbreviated: the agenda has room for it and "September"
+// reads as a date where "Sep" reads as a code.
+const MONTH_LONG = new Intl.DateTimeFormat('en-US', { month: 'long' });
 const WEEKDAY_SHORT = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
 
 function asDate(value) {
@@ -210,7 +212,7 @@ function renderDayHead(date, isToday) {
   const numeral = el('span', 'day-num', String(date.getDate()));
   const stack = el('span', 'day-stack');
   stack.append(
-    el('span', 'day-month', MONTH_SHORT.format(date)),
+    el('span', 'day-month', MONTH_LONG.format(date)),
     el('span', 'day-weekday', WEEKDAY_SHORT.format(date)),
   );
   head.append(numeral, stack);
