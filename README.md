@@ -90,9 +90,42 @@ second time. On speakers rather than headphones the far end leaks into your micr
 and a line that is the same words on both tracks, quieter on the copy that is the echo,
 is dropped from the transcript rather than shown twice. It is not lost: every dropped
 line is written into `meeting.json` under `echoesSuppressed`, with its text and the line
-it echoed, so the decision can be checked afterwards.
-The whole thing can be turned off in Settings, and then the transcript is written after
-you stop.
+it echoed, so the decision can be checked afterwards. Live transcription can be turned
+off in Settings, and then the transcript is written after you stop instead.
+
+**Filler words** are dropped as the lines are written: standalone "uh", "um", "hm" and
+"erm" only, and never inside a real word, so "umbrella" and "hummus" keep their letters
+and "uh-huh" stays whole, because it is agreement and often the point of the sentence it
+answers. This is parity rather than cleverness: commercial transcripts read clean because
+their speech vendors strip disfluencies before anyone sees the text. It has its own
+checkbox in Settings, and it applies to transcripts made from then on rather than
+rewriting ones you already have. It may also do very little: Parakeet does not emit many
+disfluencies to begin with, and that has not yet been measured against a real meeting.
+
+**The transcript card.** It sits between your notes and the bottom bar, opened and closed
+by the waveform button, and stays put while the notes scroll under it. Type in its search
+box to filter to matching lines with the match highlighted, click any line to copy it in
+the file's own `[hh:mm:ss] Me:` format, and the footer carries the same Stop the bar does
+plus a line asking you to get consent when transcribing others. That last one is not
+legal advice and does not pretend to be. It is there because a tool that records other
+people should say so where the recording is visible, not only in a settings page nobody
+opens.
+
+**Stop and Resume.** Stop ends the capture, not the note. Press the button again, and the
+recording carries on into the same note as another part of it, whether that is thirty
+seconds or a day later. The button says Resume rather than Record whenever that is what
+it will do, and "+ New note" is how you start a fresh one. This is a change from earlier
+versions, where pressing Record with a note open silently started a second, unrelated
+note.
+
+Each part keeps its own audio, `mic-2.wav` and `system-2.wav` for the second, because a
+resumed capture reopens the microphone and may come back at a different sample rate, and
+because the gap between the parts is real time that no recording covers. The transcript
+is one file with one clock running through it, so a line from the second part is stamped
+where it was actually said. The note header then shows two numbers: the duration is the
+audio that was actually captured, and the span is the wall-clock window it happened in. A
+one-hour call stopped for a twenty-minute break is forty minutes of audio inside a
+sixty-minute span, and both of those are worth knowing.
 
 **The recording indicator.** In the note, a round waveform button beside Record: grey and
 still when nothing is being captured, olive-green and moving while it is, and clicking it
@@ -109,7 +142,7 @@ focus off the call. It appears when a recording starts and is gone when one ends
 
 Windows x64, from the
 [latest release](https://github.com/joshuakeum9-cell/min/releases/latest):
-`MIN-Setup.exe`, about 118 MB, which Windows Explorer will call 112 MB because it
+`MIN-Setup.exe`, about 118 MB, which Windows Explorer will call 113 MB because it
 counts in binary units. It installs for the current user only, so it never wants an
 administrator password, and the models, Parakeet TDT 0.6B v3 and Silero VAD, arrive on
 first launch. The filename carries no version, so this direct link keeps working across
@@ -118,7 +151,7 @@ releases:
 
 ```powershell
 Get-FileHash "MIN-Setup.exe" -Algorithm SHA256
-# ffb07d15a9a9591887b54eda72d18e0832f9c6c15b322b36cbfa278e51feee56, 117,996,976 bytes
+# 6ce1487ea720d38bbed7e8d25b20d60168de4f09cb7f3f534cb5f91d20010858, 118,015,127 bytes
 ```
 
 That hash is published here and on the same release page as the file it describes, so it catches a
@@ -171,8 +204,20 @@ in `results/` as dated JSON, never overwritten.
 ## Where your data lives, and how to delete it
 
 Your meetings are plain markdown in `~/Meetings` (`C:\Users\<you>\Meetings`), the source
-of truth and yours; audio is deleted once transcription succeeds. Everything else sits
-outside it, in `%APPDATA%\MIN`, or `C:\Users\<you>\AppData\Roaming\MIN`.
+of truth and yours. One folder per meeting:
+
+| File | What it is |
+|---|---|
+| `my-notes.md` | What you typed, verbatim. Never rewritten by anything. |
+| `transcript.md` | Every line that was said, with a timestamp and a speaker. One file however many times the meeting was stopped and resumed. |
+| `note.md` | The write-up, once you paste one back. |
+| `meeting.json` | Timings, devices, track integrity, and a record per part of whether its transcript is complete. |
+| `mic.wav`, `system.wav` | Your microphone and everyone else, kept only until that part is transcribed. A resumed meeting adds `mic-2.wav` and `system-2.wav`, and so on. |
+
+Audio is deleted once its transcription succeeds, and only then: a worker that crashed or
+recognised nothing leaves the wavs where they are, because they are the only way to try
+again. Everything else sits outside your Meetings folder, in `%APPDATA%\MIN`, or
+`C:\Users\<you>\AppData\Roaming\MIN`.
 
 | Path under `%APPDATA%\MIN` | What it holds |
 |---|---|

@@ -517,7 +517,6 @@ export async function transcribeMeeting(dir, opts = {}) {
         utterances: r.segments.length,
         voicedSeconds: r.meta?.voicedSeconds ?? null,
       })),
-      audio: null,
     };
 
     // Only discard audio when BOTH tracks succeeded AND something was
@@ -529,13 +528,13 @@ export async function transcribeMeeting(dir, opts = {}) {
         await fsp.rm(t.wav, { force: true });
         deleted++;
       }
-      segment.transcript.audio = 'deleted after successful transcription';
+      segment.audio = 'deleted after successful transcription';
     } else if (keepAudio) {
-      segment.transcript.audio = 'kept, --keep-audio';
+      segment.audio = 'kept, --keep-audio';
     } else if (!out.count) {
-      segment.transcript.audio = 'kept, nothing was recognised, so no transcript was written';
+      segment.audio = 'kept, nothing was recognised, so no transcript was written';
     } else {
-      segment.transcript.audio = 'kept, a worker failed, so the transcript may be incomplete';
+      segment.audio = 'kept, a worker failed, so the transcript may be incomplete';
     }
   }
 
