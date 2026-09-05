@@ -157,6 +157,20 @@ function errorLine(err) {
 let api = null;
 let navigate = () => {};
 let meetings = [];          // newest first, as the library returns them
+/*
+ * The agenda shows a fortnight, five meetings at a time, which is the shape
+ * Granola documents: "the desktop app shows the next 14 days", and "we show 5
+ * meetings to keep the app tidy, but you can use the forward and back arrows to
+ * page through additional meetings".
+ *
+ * Paging is by MEETING, not by day, so the card is the same height whether a
+ * day holds one meeting or nine. That is what stops a busy week from growing an
+ * agenda taller than the window.
+ */
+const AGENDA_DAYS = 14;
+const AGENDA_PAGE = 5;
+let agendaPage = 0;         // 0 is today onwards
+
 let agenda = [];            // last agenda groups from the main process
 let calendarConfigured = false;
 let calendarError = '';
@@ -227,6 +241,49 @@ function renderDayHead(date, isToday) {
   return head;
 }
 
+/** How many meetings the whole fortnight holds. */
+function countEvents(groups) {
+  let n = 0;
+  for (const g of groups) n += g.events.length;
+  return n;
+}
+
+/**
+ * Back, forward and Today, beside the heading.
+ *
+ * Rebuilt on every render rather than kept and mutated, because the page count
+ * changes whenever the calendar does and there is nothing here worth the
+ * bookkeeping of a partial update.
+ */
+function renderAgendaNav(pages, total) {
+  const nav = $('agendaNav');
+  if (!nav) return;
+  clear(nav);
+  if (total <= AGENDA_PAGE) return;   // one page: nothing to steer
+
+  const go = (to) => { agendaPage = to; renderAgenda(); };
+
+  if (agendaPage > 0) {
+    const today = el('button', 'agenda-nav-today', 'Today');
+    today.type = 'button';
+    today.title = 'Back to today';
+    today.addEventListener('click', () => go(0));
+    nav.append(today);
+  }
+
+  const arrow = (label, glyph, to, enabled) => {
+    const b = el('button', 'agenda-nav-btn', glyph);
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.disabled = !enabled;
+    if (enabled) b.addEventListener('click', () => go(to));
+    nav.append(b);
+  };
+  arrow('Earlier meetings', '\u2039', agendaPage - 1, agendaPage > 0);
+  arrow('Later meetings', '\u203a', agendaPage + 1, agendaPage < pages - 1);
+}
+
 function renderEventRow(ev) {
   const row = el('div', 'event');
   if (ev.inProgress) row.classList.add('now');
@@ -244,7 +301,25 @@ function renderEventRow(ev) {
   body.append(when);
 
   row.append(rule, body);
-  row.title = ev.attendeeCount > 1 ? `${ev.attendeeCount} attendees` : '';
+
+  /*
+   * The row is how a note gets attached to a meeting. Granola: "Clicking on one
+   * of these meetings will create a note for that meeting". The note opens
+   * carrying the event, so its title and attendees are the meeting's, and
+   * pressing Record then keeps them.
+   *
+   * It does NOT start recording by itself. Opening a note days early to jot
+   * down pre-meeting thoughts is the other half of what this click is for, and
+   * a click that silently switched on the microphone would make that unusable.
+   */
+  row.tabIndex = 0;
+  row.setAttribute('role', 'button');
+  row.title = ev.attendeeCount > 1 ? `${ev.attendeeCount} attendees` : 'Open a note for this meeting';
+  const open = () => navigate('note', { prefill: { calendarEvent: ev, title: ev.title } });
+  row.addEventListener('click', open);
+  row.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+  });
   return row;
 }
 
@@ -273,13 +348,35 @@ function renderAgenda() {
   }
 
   const now = new Date();
-  const groups = agenda.slice();
-  // Today always leads the card, even with nothing on it, so the "No events
-  // today" line sits under today's numeral where the eye expects it.
-  if (!groups.some((g) => g.isToday)) {
+
+  /*
+   * Flatten to a list of meetings, take this page's five, then rebuild the day
+   * groups around only those. Grouping after slicing is what keeps a page five
+   * meetings tall regardless of how they fall across days.
+   */
+  const flat = [];
+  for (const g of agenda) for (const ev of g.events) flat.push({ g, ev });
+  const total = flat.length;
+  const pages = Math.max(1, Math.ceil(total / AGENDA_PAGE));
+  agendaPage = Math.min(Math.max(0, agendaPage), pages - 1);
+  const slice = flat.slice(agendaPage * AGENDA_PAGE, agendaPage * AGENDA_PAGE + AGENDA_PAGE);
+
+  const byDay = new Map();
+  for (const { g, ev } of slice) {
+    if (!byDay.has(g)) byDay.set(g, { date: g.date, isToday: g.isToday, events: [] });
+    byDay.get(g).events.push(ev);
+  }
+  const groups = [...byDay.values()];
+
+  // Today leads the FIRST page even with nothing on it, so the "No events
+  // today" line sits under today's numeral where the eye expects it. On later
+  // pages it would be a lie: those days are elsewhere in the fortnight.
+  if (agendaPage === 0 && !groups.some((g) => g.isToday)) {
     groups.unshift({ date: startOfDay(now), isToday: true, events: [] });
     groups.sort((a, b) => a.date - b.date);
   }
+
+  renderAgendaNav(pages, total);
 
   for (const g of groups) {
     const day = el('div', 'agenda-day');
@@ -316,7 +413,28 @@ function renderNoteRow(m) {
   const started = asDate(m.startedAt);
   const time = el('span', 'note-time mono', clock(started));
 
-  row.append(tile, body, time);
+  /*
+   * The overflow button. Hidden until the row is hovered or something in it has
+   * focus, so a list of notes stays a list of notes; the CSS does that, not
+   * JavaScript, so it cannot get out of step with the pointer.
+   *
+   * It is a real button with a label rather than a decorated span, because it
+   * is the only route to deleting a meeting and that must be reachable from the
+   * keyboard.
+   */
+  const more = el('button', 'row-more');
+  more.type = 'button';
+  more.title = 'More';
+  more.setAttribute('aria-label', `More actions for ${m.title || 'this meeting'}`);
+  more.setAttribute('aria-haspopup', 'menu');
+  more.textContent = '\u22ef';
+  more.addEventListener('click', (e) => {
+    e.stopPropagation();   // never open the note as well
+    openRowMenu(row, more, m);
+  });
+  more.addEventListener('keydown', (e) => e.stopPropagation());
+
+  row.append(tile, body, time, more);
 
   const open = () => navigate('note', m);
   row.addEventListener('click', open);
@@ -327,6 +445,103 @@ function renderNoteRow(m) {
     }
   });
   return row;
+}
+
+/* ------------------------------------------------------------- row menu */
+
+// One menu open at a time, tracked here rather than by walking the DOM, so
+// closing is a single call whatever opened it.
+let openMenu = null;
+
+function closeRowMenu() {
+  if (!openMenu) return;
+  const { menu, button, onDoc, onKey } = openMenu;
+  openMenu = null;
+  document.removeEventListener('mousedown', onDoc, true);
+  document.removeEventListener('keydown', onKey, true);
+  menu.remove();
+  button.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * The overflow menu for one note.
+ *
+ * Anchored inside the row, which keeps it with the row when the list scrolls,
+ * and closed by anything that means "I am done": a click elsewhere, Escape, or
+ * opening another one. mousedown rather than click for the outside handler,
+ * because a click that starts outside and ends inside should still close it.
+ */
+function openRowMenu(row, button, m) {
+  const wasOpen = openMenu?.button === button;
+  closeRowMenu();
+  if (wasOpen) return;   // a second press on the same button closes it
+
+  const menu = el('div', 'row-menu');
+  menu.setAttribute('role', 'menu');
+
+  const item = (label, cls, run) => {
+    const b = el('button', `row-menu-item${cls ? ' ' + cls : ''}`, label);
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeRowMenu();
+      run();
+    });
+    menu.append(b);
+    return b;
+  };
+
+  item('Move to trash', 'danger', () => trashMeeting(m));
+
+  const onDoc = (e) => { if (!menu.contains(e.target) && e.target !== button) closeRowMenu(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeRowMenu(); button.focus(); }
+  };
+  document.addEventListener('mousedown', onDoc, true);
+  document.addEventListener('keydown', onKey, true);
+
+  row.append(menu);
+  button.setAttribute('aria-expanded', 'true');
+  openMenu = { menu, button, onDoc, onKey };
+  menu.querySelector('.row-menu-item')?.focus();
+}
+
+/**
+ * Send one meeting to the recycle bin and drop it from the list.
+ *
+ * No confirmation dialog on purpose: the operating system's own trash IS the
+ * confirmation, the row says where it went, and a modal for something this
+ * reversible is the kind of friction that trains people to click through
+ * dialogs that matter.
+ */
+async function trashMeeting(m) {
+  if (!m?.dir || typeof api?.trashMeeting !== 'function') return;
+  try {
+    await api.trashMeeting(m.dir);
+    meetings = meetings.filter((x) => x.dir !== m.dir);
+    renderNoteList();
+    homeStatus(`"${m.title || 'Untitled meeting'}" moved to the recycle bin.`, 'good');
+  } catch (err) {
+    homeStatus('Could not move it to the trash: ' + (err?.message ?? err), 'warn');
+  }
+}
+
+/*
+ * Home's own status line. The note bar's strip lives inside the note view, so
+ * anything reported from here went nowhere at all: initHome was even handed an
+ * onStatus callback that wrote to it and was never called. Clears itself,
+ * because a message about a row that is already gone stops being true.
+ */
+let homeStatusTimer = null;
+
+function homeStatus(text, cls = '') {
+  const el2 = document.getElementById('homeStatus');
+  if (!el2) return;
+  clearTimeout(homeStatusTimer);
+  el2.className = cls;
+  el2.textContent = text;
+  if (text) homeStatusTimer = setTimeout(() => { el2.textContent = ''; el2.className = ''; }, 6000);
 }
 
 /** The library's order is newest first by folder name; sort by startedAt to be sure. */
@@ -404,9 +619,13 @@ async function loadCalendar(seq) {
     return;
   }
   try {
-    const groups = await api.calendarUpcoming({ days: 7 });
+    // Fourteen, which is the horizon Granola's desktop app documents for its
+    // own Coming up. The store caps the request at its 60-day window anyway.
+    const groups = await api.calendarUpcoming({ days: AGENDA_DAYS });
     if (seq !== calSeq) return;
     agenda = normaliseAgenda(groups, new Date());
+    // A refresh can shorten the list under the user's feet.
+    agendaPage = Math.min(agendaPage, Math.max(0, Math.ceil(countEvents(agenda) / AGENDA_PAGE) - 1));
     calendarError = '';
   } catch (err) {
     if (seq !== calSeq) return;

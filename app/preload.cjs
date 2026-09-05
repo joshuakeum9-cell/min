@@ -36,6 +36,8 @@ contextBridge.exposeInMainWorld('api', {
   copyPrompt: (dir) => ipcRenderer.invoke('copy-prompt', dir),
   listMeetings: () => ipcRenderer.invoke('list-meetings'),
   readMeeting: (dir) => ipcRenderer.invoke('read-meeting', dir),
+  /** Move a meeting folder to the recycle bin. Recoverable by the user. */
+  trashMeeting: (dir) => ipcRenderer.invoke('trash-meeting', dir),
   search: (q) => ipcRenderer.invoke('search', q),
   /** The generated write-up, note.md. */
   saveNote: (dir, text) => ipcRenderer.invoke('save-note', dir, text),

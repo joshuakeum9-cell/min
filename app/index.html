@@ -225,8 +225,15 @@
     padding:0 var(--gutter) 24px; flex:1; min-height:0; overflow-y:auto;
   }
   /*
-   * Direct child of a view on purpose. `bar` is also the class on each <i> in
-   * #levelBars, and unscoped this rule capped every level bar with a hairline.
+   * Home is a list of rows, not prose, so it is not bound by the measure that
+   * makes the note column 640px. Giving it the window lets the agenda breathe:
+   * a class title plus its time had been wrapping inside a column sized for
+   * paragraphs, which is what read as squeezed.
+   */
+  #viewHome > .col { max-width:calc(880px + 2 * var(--gutter)); }
+  /*
+   * Direct child of a view on purpose, so it cannot reach a `bar` class used
+   * for something else inside a view.
    */
   /*
    * Scrollbars. The default Windows one is a wide grey slab that reads as
@@ -253,7 +260,7 @@
 
   h1.display {
     margin:8px 0 14px; font:400 var(--fs-display)/var(--lh-display) var(--serif);
-    letter-spacing:-0.01em; color:var(--ink);
+    letter-spacing:.01em; color:var(--ink);
   }
   .card {
     background:var(--surface-raised); border:1px solid var(--hairline);
@@ -304,6 +311,25 @@
    * The tone custom properties (--tone-bg, --tone-ink) are set inline per row
    * from a hash of the title, so a meeting keeps its colour between sessions.
    */
+  /* The heading and its pager share a line, the pager pushed to the end. */
+  .section-head { display:flex; align-items:baseline; gap:12px; }
+  .section-head h1.display { flex:none; }
+  #agendaNav { margin-left:auto; display:flex; align-items:center; gap:2px; }
+  .agenda-nav-btn {
+    width:26px; height:26px; padding:0; display:grid; place-items:center;
+    border:none; border-radius:var(--r-ctl); background:transparent;
+    color:var(--ink-2); font:400 17px/1 var(--sans);
+  }
+  .agenda-nav-btn:hover:not(:disabled) { background:var(--rail-hover); color:var(--ink); }
+  /* Kept in place rather than hidden at the ends, so the pair does not jump. */
+  .agenda-nav-btn:disabled { color:var(--ink-3); opacity:.4; cursor:default; }
+  .agenda-nav-today {
+    height:26px; padding:0 9px; border:none; border-radius:var(--r-pill);
+    background:transparent; color:var(--ink-2);
+    font:500 var(--fs-xs)/var(--lh-ctl) var(--sans);
+  }
+  .agenda-nav-today:hover { background:var(--rail-hover); color:var(--ink); }
+
   #comingUp { padding:4px 0; }
   /*
    * Three columns: the date, a one-pixel divider, then the events. The divider
@@ -340,7 +366,13 @@
     border-radius:var(--r-pill); background:var(--danger);
   }
   .agenda-events { display:flex; flex-direction:column; gap:9px; min-width:0; }
-  .event { display:grid; grid-template-columns:3px minmax(0,1fr); gap:12px; min-width:0; min-height:var(--row); }
+  /* A meeting is the way into a note for it, so the row behaves like one. */
+  .event {
+    display:grid; grid-template-columns:3px minmax(0,1fr); gap:12px; min-width:0;
+    min-height:var(--row); cursor:pointer; border-radius:var(--r-ctl);
+  }
+  .event:hover { background:var(--rail-hover); }
+  .event:focus-visible { outline:2px solid var(--accent-ink); outline-offset:2px; }
   /* The rule is its own element rather than a border so it can hold the tone
      colour without the row inheriting it. */
   /*
@@ -390,7 +422,8 @@
     font:500 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--ink-3); padding:0 10px; margin:18px 0 6px;
   }
   .note-row {
-    display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center;
+    position:relative;
+    display:grid; grid-template-columns:32px minmax(0,1fr) auto 26px; align-items:center;
     gap:12px; padding:5px 10px; min-height:var(--row); border-radius:8px; cursor:pointer;
   }
   .note-row:hover, .note-row:focus-visible { background:var(--rail-hover); outline:none; }
@@ -409,6 +442,46 @@
     font:400 var(--fs-xs)/var(--lh-title) var(--sans); color:var(--ink-3);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
+  #homeStatus {
+    flex:1; min-width:0; text-align:right; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; font:400 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--ink-3);
+  }
+  #homeStatus.good { color:var(--accent-ink); }
+  #homeStatus.warn { color:var(--danger); }
+
+  /*
+   * The overflow button on a note row. Hidden until the row is hovered or
+   * something inside it has focus, so the list stays a list; revealed by CSS
+   * rather than by script so it can never disagree with where the pointer is.
+   * It keeps its space in the grid either way, so nothing shifts on hover.
+   */
+  .row-more {
+    grid-column:4; justify-self:end; width:26px; height:26px; padding:0;
+    display:grid; place-items:center; border:none; border-radius:var(--r-ctl);
+    background:transparent; color:var(--ink-3); font-size:15px; line-height:1;
+    opacity:0; transition:opacity .12s, background .12s;
+  }
+  .note-row:hover .row-more,
+  .note-row:focus-within .row-more,
+  .row-more:focus-visible { opacity:1; }
+  .row-more:hover { background:var(--rail-active); color:var(--ink); }
+
+  /* Anchored to the row so it travels with it while the list scrolls. */
+  .row-menu {
+    position:absolute; top:calc(100% - 6px); right:8px; z-index:20; min-width:160px;
+    display:flex; flex-direction:column; padding:4px;
+    background:var(--surface-raised); border:1px solid var(--hairline);
+    border-radius:var(--r-card); box-shadow:0 6px 20px rgba(28,28,26,.10);
+  }
+  .row-menu-item {
+    display:block; width:100%; text-align:left; padding:7px 10px;
+    border:none; border-radius:var(--r-ctl); background:transparent;
+    font:400 var(--fs-sm)/var(--lh-ctl) var(--sans); color:var(--ink);
+  }
+  .row-menu-item:hover, .row-menu-item:focus-visible { background:var(--rail-hover); outline:none; }
+  .row-menu-item.danger { color:var(--danger); }
+  .row-menu-item.danger:hover, .row-menu-item.danger:focus-visible { background:var(--danger-soft); }
+
   .list-empty { padding:18px 10px; color:var(--ink-3); }
   .note-snip { font:400 var(--fs-xs)/var(--lh-title) var(--sans); color:var(--ink-3); grid-column:2 / -1; margin-top:-4px; }
   .note-snip b { color:var(--ink); font-weight:500; }
@@ -429,9 +502,15 @@
   /* ------------------------------------------------------------------- note */
   .col.note { display:flex; flex-direction:column; }
   #noteHeader { flex:none; padding:4px 0 10px; }
+  /*
+   * No negative tracking. The display serif was set at -0.005em here and
+   * -0.01em on h1.display, which pulled the letters together and made a short
+   * title like "zoom meeting" read as cramped. A hair of positive tracking is
+   * what the face wants at this size.
+   */
   #noteTitle {
     width:100%; border:none; background:transparent; padding:0; outline:none;
-    font:400 var(--fs-display)/var(--lh-display) var(--serif); color:var(--ink); letter-spacing:-0.005em;
+    font:400 var(--fs-display)/var(--lh-display) var(--serif); color:var(--ink); letter-spacing:.01em;
   }
   #noteTitle::placeholder { color:var(--ink-3); }
   /* #noteMeta chips are emitted by record.js as span.chip */
@@ -625,7 +704,7 @@
   #micPill:hover { border-color:var(--ink-3); }
   #micPill .waveform { display:flex; align-items:center; gap:2px; height:16px; }
   /*
-   * Same idiom as #levelBars: record.js writes --lvl (0 to 1) per bar and the
+   * record.js writes --lvl (0 to 1) per bar and the
    * bar scales from a floor of 0.18, so a silent room still shows a glyph
    * rather than four invisible slivers.
    */
@@ -680,33 +759,6 @@
   #recBtn.rec-on:hover { background:#f2d6c8; }
   #recBtn.rec-on .dot { animation:pulse 1.3s ease-in-out infinite; }
 
-  /*
-   * Level bars. record.js sets --lvl (0 to 1) on each .cluster; the bars in a
-   * cluster scale by different factors so one number reads as a dancing group.
-   * Left cluster is them, right cluster is you, matching the bubble sides.
-   */
-  #levelBars { flex:none; display:flex; align-items:center; gap:14px; height:24px; padding:0 4px; }
-  #levelBars .cluster { display:flex; align-items:center; gap:3px; height:22px; }
-  #levelBars i {
-    display:block; width:3px; height:22px; border-radius:2px;
-    transform-origin:center; transform:scaleY(min(1, calc(0.1 + var(--lvl, 0) * var(--k, 1))));
-    transition:transform 90ms linear;
-  }
-  #levelBars .them i { background:var(--accent-soft); }
-  #levelBars .you i { background:var(--accent-ink); }
-  #levelBars i:nth-child(1) { --k:.45; } #levelBars i:nth-child(2) { --k:.8; }
-  #levelBars i:nth-child(3) { --k:1; }   #levelBars i:nth-child(4) { --k:.7; }
-  #levelBars i:nth-child(5) { --k:.4; }
-  /* Keyed off the record button rather than a second class on the bar, so
-     there is one source of truth for "is this recording?" to keep in sync. */
-  #noteBar:not(:has(#recBtn.rec-on)) #levelBars { opacity:.35; }
-  /*
-   * At the window's minimum width the bar has four fixed items and one that
-   * must stay readable. The pill already shows the level, so the wide meter is
-   * the one to drop rather than letting #status truncate to nothing.
-   */
-  @media (max-width: 980px) { #noteBar #levelBars { display:none; } }
-
   #status {
     flex:1; min-width:0; text-align:right;
     font:400 var(--fs-xs)/var(--lh-title) var(--mono); color:var(--ink-3);
@@ -718,7 +770,7 @@
   @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
   @media (prefers-reduced-motion: reduce) {
     #recBtn.rec-on .dot, .liveDot { animation:none; }
-    #levelBars i, #micPill .waveform i { transition:none; }
+    #micPill .waveform i { transition:none; }
     /* The colour change alone still says "recording" without any movement. */
     #micPill.live.hum .waveform i { animation:none; }
   }
@@ -790,7 +842,10 @@
     <!-- ──────────────────────────── home ──────────────────────────── -->
     <section class="view" id="viewHome">
       <div class="col">
-        <h1 class="display">Coming up</h1>
+        <div class="section-head">
+          <h1 class="display">Coming up</h1>
+          <div id="agendaNav"></div>
+        </div>
         <section id="comingUp" class="card">
           <p class="empty">Nothing on your calendar</p>
         </section>
@@ -801,6 +856,7 @@
           <div class="askInner">
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
             <input id="ask" type="search" placeholder="Search notes and transcripts" autocomplete="off" spellcheck="false">
+            <span id="homeStatus" aria-live="polite"></span>
             <button id="listTodos" class="btn ghost sm" title="Open the newest note">Recent</button>
           </div>
         </div>
@@ -892,14 +948,12 @@
             <span id="clock">00:00</span>
           </button>
           <!--
-            The .bar class is what record.js looks for. Without it initLevelBars
-            decides the shell shipped no meter and builds a second one, and the
-            note bar ends up with four clusters instead of two.
+            No second meter here. The pill on the left of this bar already shows
+            the level, and it is the one that also travels to the floating
+            window, so a pair of bar clusters beside it was the same information
+            a second and third time. Their removal is also what gives #status
+            room: it was colliding with them at this width.
           -->
-          <div id="levelBars" aria-hidden="true">
-            <span class="cluster them"><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i></span>
-            <span class="cluster you"><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i><i class="bar"></i></span>
-          </div>
           <span id="status">Ready.</span>
         </div>
       </div>

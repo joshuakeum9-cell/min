@@ -137,46 +137,15 @@ function resetTracks() {
   deviceEvents = [];
 }
 
-/* ------------------------------------------------------------ level bars */
+/* ---------------------------------------------------------------- levels */
 
-// Each cluster is a handful of bars that share one level but move a little
-// apart from each other, which is what reads as "dancing" rather than a meter.
-const BAR_SHAPE = [0.55, 0.85, 1, 0.85, 0.55];
-const bars = { them: [], you: [] };
-
-function initLevelBars() {
-  const root = $('levelBars');
-  if (!root) return;
-  // The shell owner supplies the markup; if it has not, build the minimum so
-  // the view still works. Left cluster is them, right cluster is you.
-  if (!root.querySelector('.bar')) {
-    for (const track of ['them', 'you']) {
-      const cluster = document.createElement('span');
-      cluster.className = `cluster ${track}`;
-      cluster.dataset.track = track;
-      for (let i = 0; i < BAR_SHAPE.length; i++) {
-        const b = document.createElement('i');
-        b.className = 'bar';
-        cluster.appendChild(b);
-      }
-      root.appendChild(cluster);
-    }
-  }
-  for (const track of ['them', 'you']) {
-    bars[track] = [...root.querySelectorAll(`.${track} .bar, [data-track="${track}"] .bar`)];
-  }
-}
-
+/*
+ * One meter, the pill. There were three: the pill, and a pair of five-bar
+ * clusters beside it showing the same two numbers again. Removing the clusters
+ * removed the only thing that needed a bar list, so the paint loop is now just
+ * the pill, which is also the meter the floating window mirrors.
+ */
 function paintLevels(silent = false) {
-  for (const [key, track] of Object.entries(LIVE_TRACK)) {
-    const lvl = silent ? 0 : T[key].level;
-    const list = bars[track];
-    for (let i = 0; i < list.length; i++) {
-      const shape = BAR_SHAPE[i % BAR_SHAPE.length];
-      const jitter = lvl > 0.02 ? 0.8 + Math.random() * 0.4 : 1;
-      list[i].style.setProperty('--lvl', Math.min(1, lvl * shape * jitter).toFixed(3));
-    }
-  }
   paintPill(silent);
 }
 
@@ -424,20 +393,6 @@ function onDeviceChange() {
 }
 
 /** Ask the calendar what is on right now. Never throws, never blocks. */
-async function autoTitle() {
-  const title = $('noteTitle');
-  if (!title || title.value.trim()) return;
-  try {
-    const ev = await api.calendarEventNow?.();
-    if (!ev || !ev.title) return;
-    // Only fill a title the user has not typed in the meantime.
-    if (title.value.trim()) return;
-    title.value = ev.title;
-    calendarEvent = ev;
-    renderMeta({ startedAt: ev.start, endedAt: ev.end, calendarEvent: ev, autoTitled: true });
-  } catch { /* the calendar is a convenience; the recording is the job */ }
-}
-
 async function start() {
   // Several awaits happen before the button is disabled. Without this guard a
   // second click attaches a second pair of worklet nodes to the same buffers;
@@ -545,9 +500,18 @@ async function start() {
   setStatus('Recording...');
   pushRecordingState();
 
-  // Everything from here is decoration or a bonus. Nothing in it may throw
-  // into the recording, so each piece is fenced on its own.
-  autoTitle();
+  /*
+   * autoTitle() used to run here, and that was the bug: every recording adopted
+   * whatever calendar event was nearest, so an impromptu note started with
+   * "+ New note" came out titled after a meeting the user was not in.
+   *
+   * Granola's own documentation draws the line the other way round. New Note is
+   * for "an ad-hoc meeting or call that isn't on your calendar", and those
+   * notes "won't be linked to your calendar"; a note becomes a calendar note by
+   * being opened FROM the meeting, not by being recorded near it. So the link
+   * is made at the point the user picks the meeting, in home.js, and pressing
+   * Record here changes nothing about what this note is.
+   */
   applyOnTop(true);
   startLive();
 
@@ -701,7 +665,7 @@ async function stopRec() {
     capturedBefore = Number(meta.durationSeconds) || capturedBefore;
     segmentIndex = segment?.index ?? segmentIndex;
     $('writeRow')?.classList.remove('hide');
-    renderMeta({ ...meta, meta, calendarEvent, autoTitled: Boolean(calendarEvent) });
+    renderMeta({ ...meta, meta, calendarEvent, fromCalendar: Boolean(calendarEvent) });
 
     const bad = Object.entries(meta.tracks).filter(([, t]) => t.silent).map(([k]) => k);
     if (bad.length) setStatus(`Saved, but ${bad.join(' and ')} captured silence.`, 'warn');
@@ -825,7 +789,7 @@ function attendeeNames(ev) {
 
 /**
  * The chips under the title. `info` is a meeting.json-like object: startedAt,
- * endedAt, durationSeconds, calendarEvent, autoTitled.
+ * endedAt, durationSeconds, calendarEvent, fromCalendar.
  */
 function renderMeta(info) {
   const meta = $('noteMeta');
@@ -865,7 +829,9 @@ function renderMeta(info) {
   const count = names.length || Number(ev?.attendeeCount) || 0;
   if (count) chip(`${count} attendee${count === 1 ? '' : 's'}`, 'attendees');
   if (ev?.recurring) chip('Recurring', 'recurring');
-  if (info?.autoTitled) chip('Auto-titled from calendar', 'auto');
+  // Named for where the note came from, not for how the title got there: the
+  // meeting is picked from Coming up now, so nothing is automatic about it.
+  if (info?.fromCalendar) chip('From calendar', 'auto');
 }
 
 /** Re-read the current meeting from disk and redraw the transcript panel. */
@@ -1079,7 +1045,6 @@ export function initNote({ api: bridge, onStatus } = {}) {
   api = bridge ?? window.api;
   onStatusCb = typeof onStatus === 'function' ? onStatus : null;
 
-  initLevelBars();
   initMicPill();
   setRecLabel('Record');
   initProviders();
@@ -1212,7 +1177,7 @@ export async function openMeeting(meeting) {
     endedAt: m.meta?.endedAt,
     durationSeconds: m.durationSeconds,
     calendarEvent,
-    autoTitled: Boolean(calendarEvent),
+    fromCalendar: Boolean(calendarEvent),
     meta: m.meta,
   });
   $('writeRow')?.classList.remove('hide');
@@ -1253,7 +1218,7 @@ export function newNote(prefill) {
   const paste = $('pasteNote');
   if (paste) paste.value = '';
   renderMeta(calendarEvent
-    ? { startedAt: calendarEvent.start, endedAt: calendarEvent.end, calendarEvent, autoTitled: !prefill?.title }
+    ? { startedAt: calendarEvent.start, endedAt: calendarEvent.end, calendarEvent, fromCalendar: true }
     : null);
   $('writeRow')?.classList.add('hide');
   $('pasteRow')?.classList.add('hide');

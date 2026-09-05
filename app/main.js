@@ -472,6 +472,25 @@ ipcMain.handle('list-meetings', async () => {
   }));
 });
 
+/**
+ * Move one meeting to the operating system's recycle bin.
+ *
+ * shell.trashItem, not fsp.rm. A meeting is the user's only copy of something
+ * they cannot re-record, so "delete" here has to mean what it means everywhere
+ * else on the machine: recoverable, by them, without us. The same reason the
+ * uninstaller leaves the Meetings folder alone.
+ *
+ * confine() first, as with every path that arrives over IPC: this one ends at a
+ * recursive delete, so it is the last place to be relaxed about where it points.
+ */
+ipcMain.handle('trash-meeting', async (_evt, dir) => {
+  const target = confine(dir);
+  await shell.trashItem(target);
+  // The search index still holds its text until this runs.
+  await reindexSoon();
+  return { ok: true, dir: target };
+});
+
 ipcMain.handle('read-meeting', async (_evt, dir) => {
   const { readMeeting } = await import('./library.js');
   return readMeeting(confine(dir));
