@@ -160,17 +160,29 @@ async function main() {
 
   await fsp.rm(OUT, { force: true });
 
-  // An .mcpb is a plain zip. Windows has no `zip`, and Compress-Archive refuses
-  // any extension but .zip, so write one there and rename.
+  /*
+   * An .mcpb is a plain zip.
+   *
+   * On Windows this used to shell out to Compress-Archive, which walks the tree
+   * with Get-ChildItem and gave up on the deeper folders inside the SDK's own
+   * dependencies: it failed with DirectoryNotFound and left no archive at all,
+   * so the rename that followed was the error the build actually reported.
+   *
+   * bsdtar ships in System32 on Windows 10 1803 and later and writes a real
+   * deflate zip. It is named by its full path rather than by PATH order,
+   * because Git for Windows puts GNU tar in front of it, and GNU tar ignores a
+   * zip request and writes a TAR instead: a bundle that installs nowhere, from
+   * a build that reported success. The format is stated outright for the same
+   * reason, since bsdtar's own -a would guess from the .mcpb name and land in
+   * exactly that hole.
+   */
   if (process.platform === 'win32') {
-    const zip = OUT.slice(0, -'.mcpb'.length) + '.zip';
-    await fsp.rm(zip, { force: true });
-    execFileSync(
-      'powershell',
-      ['-NoProfile', '-Command', `Compress-Archive -Path '${path.join(STAGE, '*')}' -DestinationPath '${zip}' -Force`],
-      { stdio: 'inherit' }
-    );
-    await fsp.rename(zip, OUT);
+    const bsdtar = path.join(process.env.SystemRoot ?? 'C:\Windows', 'System32', 'tar.exe');
+    // Named entries rather than '.', so the archive holds manifest.json at its
+    // root the way the reader expects, with no './' in front of every path.
+    // --format zip, never -a: -a guesses from the extension, and .mcpb is not a
+    // name it knows, so it would quietly write a tar under a zip's name.
+    execFileSync(bsdtar, ['--format', 'zip', '-c', '-f', OUT, '-C', STAGE, 'manifest.json', 'server'], { stdio: 'inherit' });
   } else {
     execFileSync('zip', ['-qr', OUT, '.'], { cwd: STAGE, stdio: 'inherit' });
   }
