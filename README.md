@@ -241,6 +241,19 @@ Desktop extension, `dist/min.mcpb` from Releases, about 5 MB, and ask Claude for
 write-up: it reads the meeting off your disk and saves the note straight back into its
 folder. Build it with `npm run mcpb`.
 
+**Asking Claude about a meeting while it is still happening.** The live transcript is
+written into the meeting's folder as the meeting runs, a couple of seconds behind the
+speech, and so are the notes you type. The extension lists a meeting that is being recorded
+as "recording now" and, when asked to read it, returns what has been said and typed so far
+and says so, so Claude Desktop can answer "what did she say about the deadline" during the
+call and read again a minute later for the newer lines. That is the whole of MIN's live
+assistant: no model of its own, no API, no bill, the subscription you already have reading a
+file on your own disk. It is also why a crash mid-meeting now keeps the words as well as the
+audio. Two limits worth knowing. The lines are grouped by speaker turn, the way the saved
+transcript always has been, so a long stretch of one person talking is one growing paragraph
+rather than a bubble per sentence. And Claude Desktop reads when asked; it does not watch the
+file, so the question has to come from you.
+
 There is no "log in with ChatGPT" button because no such thing exists: ChatGPT Plus,
 Claude Pro and Gemini Advanced are subscriptions to a website, with no API access and no
 OAuth for third-party apps. Faking it means lifting your browser session cookie, which
@@ -277,7 +290,7 @@ of truth and yours. One folder per meeting:
 | File | What it is |
 |---|---|
 | `my-notes.md` | What you typed, verbatim. Never rewritten by anything. |
-| `transcript.md` | Every line that was said, with a timestamp and a speaker. One file however many times the meeting was stopped and resumed. |
+| `transcript.md` | Every line that was said, with a timestamp and a speaker, written into the folder while the meeting is still running and finalised at Stop. One file however many times the meeting was stopped and resumed. |
 | `note.md` | The write-up, once you paste one back. |
 | `meeting.json` | Timings, devices, track integrity, and a record per part of whether its transcript is complete. |
 | `mic.wav`, `system.wav` | Your microphone and everyone else, kept only until that part is transcribed. A resumed meeting adds `mic-2.wav` and `system-2.wav`, and so on. |

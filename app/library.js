@@ -60,12 +60,18 @@ async function readCapped(file) {
 
 /** Read one meeting folder into a plain object. Missing pieces are nulls, not errors. */
 export async function readMeeting(dir) {
-  const [metaRes, notesRes, transcriptRes, noteRes] = await Promise.all([
+  const [metaRes, notesRes, transcriptRes, noteRes, captureRes] = await Promise.all([
     readCapped(path.join(dir, 'meeting.json')),
     readCapped(path.join(dir, 'my-notes.md')),
     readCapped(path.join(dir, 'transcript.md')),
     readCapped(path.join(dir, 'note.md')),
+    readCapped(path.join(dir, 'capture.json')),
   ]);
+  // capture.json exists only while a recording is running, or after one was
+  // interrupted. Either way the folder is a meeting with no meeting.json yet,
+  // and the marker carries what that file would have said.
+  const capture = captureOf(captureRes.text);
+  const recording = Boolean(capture);
 
   // Anything the UI should be able to explain instead of rendering as empty.
   const fileIssues = {};
@@ -96,15 +102,17 @@ export async function readMeeting(dir) {
   if (!meta) {
     // A folder we could not read is not the same as an empty folder: dropping it
     // here would hide the problem the same way an empty meeting does.
-    if (transcript === null && !notes && note === null && !hasIssues) return null;
+    if (transcript === null && !notes && note === null && !hasIssues && !recording) return null;
     const stamp = path.basename(dir).match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})-(.*)$/);
     meta = {
-      title: stamp ? stamp[6].replace(/-/g, ' ') : path.basename(dir),
-      startedAt: stamp
+      title: capture?.title || (stamp ? stamp[6].replace(/-/g, ' ') : path.basename(dir)),
+      startedAt: capture?.startedAt ?? (stamp
         ? new Date(+stamp[1], +stamp[2] - 1, +stamp[3], +stamp[4], +stamp[5]).toISOString()
-        : null,
+        : null),
       durationSeconds: 0,
-      metaBroken: true,
+      // A recording in progress has no meeting.json yet by design; that is not
+      // a broken one.
+      metaBroken: !recording,
     };
   }
 
@@ -139,10 +147,33 @@ export async function readMeeting(dir) {
     transcriptPending,
     transcribed: Boolean(transcript),
     written: Boolean(note),
+    // True while a recording is running in this folder (or was cut short and
+    // not yet assembled). The MCP server says "recording now" and re-reads.
+    recording,
     meta,
     // Only present when something went wrong, so a healthy record keeps its shape.
     ...(hasIssues ? { fileIssues } : null),
   };
+}
+
+/**
+ * What the capture marker says, or null. It is written by the recorder at the
+ * moment Record is pressed, so its startedAt is a millisecond number; readers
+ * of a meeting want the same ISO string meeting.json would have carried.
+ */
+function captureOf(text) {
+  if (!text) return null;
+  try {
+    const c = JSON.parse(text);
+    if (!c || typeof c !== 'object') return null;
+    const ms = typeof c.startedAt === 'number' ? c.startedAt : Date.parse(c.startedAt);
+    return {
+      title: typeof c.title === 'string' ? c.title : '',
+      startedAt: Number.isFinite(ms) ? new Date(ms).toISOString() : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -211,13 +242,16 @@ async function anyAudio(dir, meta, micBytes) {
  * reconstructed from the folder name, and a folder with nothing in it is null.
  */
 export async function summariseMeeting(dir) {
-  const [metaRes, hasTranscript, hasNote, notesBytes, micBytes] = await Promise.all([
+  const [metaRes, hasTranscript, hasNote, notesBytes, micBytes, captureRes] = await Promise.all([
     readCapped(path.join(dir, 'meeting.json')),
     exists(path.join(dir, 'transcript.md')),
     exists(path.join(dir, 'note.md')),
     sizeOf(path.join(dir, 'my-notes.md')),
     sizeOf(path.join(dir, 'mic.wav')),
+    readCapped(path.join(dir, 'capture.json')),
   ]);
+  const capture = captureOf(captureRes.text);
+  const recording = Boolean(capture);
 
   let meta = null;
   try {
@@ -227,15 +261,15 @@ export async function summariseMeeting(dir) {
   if (!meta) {
     // The empty-notes file the recorder always writes is one newline, so a
     // folder is empty when nothing is bigger than that.
-    if (!hasTranscript && !hasNote && notesBytes <= 1 && metaRes.status === 'absent') return null;
+    if (!hasTranscript && !hasNote && notesBytes <= 1 && metaRes.status === 'absent' && !recording) return null;
     const stamp = path.basename(dir).match(/^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})-(.*)$/);
     meta = {
-      title: stamp ? stamp[6].replace(/-/g, ' ') : path.basename(dir),
-      startedAt: stamp
+      title: capture?.title || (stamp ? stamp[6].replace(/-/g, ' ') : path.basename(dir)),
+      startedAt: capture?.startedAt ?? (stamp
         ? new Date(+stamp[1], +stamp[2] - 1, +stamp[3], +stamp[4], +stamp[5]).toISOString()
-        : null,
+        : null),
       durationSeconds: 0,
-      metaBroken: true,
+      metaBroken: !recording,
     };
   }
 
@@ -254,6 +288,7 @@ export async function summariseMeeting(dir) {
     transcriptPending: pendingSegments(meta).length > 0,
     transcribed: hasTranscript,
     written: hasNote,
+    recording,
     metaBroken: Boolean(meta.metaBroken),
   };
 }

@@ -879,6 +879,7 @@ ipcMain.handle('list-meetings', async () => {
     // anything was typed, and answering it in characters means reading the file.
     notesBytes: m.notesBytes,
     transcriptPending: m.transcriptPending,
+    recording: m.recording,
   }));
 });
 
@@ -1561,6 +1562,52 @@ let live = null;
 let liveMeta = null;
 
 /*
+ * The live transcript is written to disk while the meeting is still running.
+ *
+ * Until now the lines existed only in live.js's memory and on screen until Stop.
+ * Writing them as they arrive does two things. A crash mid-meeting keeps the
+ * words as well as the audio. And anything that reads the meeting folder can
+ * read the conversation so far: the MCP server in particular, which is how
+ * Claude Desktop, on the subscription the owner already pays for, gets to
+ * answer questions about a meeting while it is happening, with no API and no
+ * bill. That is the closest a zero-cost app can come to Granola's live chat.
+ *
+ * Rebuilt from the session's segments each time rather than appended, because
+ * a line can be reclassified as an echo after it was first emitted, and an
+ * appended file would keep it. Written to a temp name and renamed, so a reader
+ * never sees a torn file. Debounced, because lines arrive in bursts.
+ */
+const LIVE_WRITE_MS = 1500;
+let liveWriteTimer = null;
+let liveWriting = null;
+
+function scheduleLiveWrite() {
+  if (liveWriteTimer || !liveMeta?.dir) return;
+  liveWriteTimer = setTimeout(() => {
+    liveWriteTimer = null;
+    writeLiveTranscript().catch(() => { /* the next burst tries again */ });
+  }, LIVE_WRITE_MS);
+  liveWriteTimer.unref?.();
+}
+
+async function writeLiveTranscript() {
+  const meta = liveMeta;
+  const session = live;
+  if (!meta?.dir || typeof session?.segments !== 'function') return;
+  liveWriting = (async () => {
+    const built = meta.build(meta.toResults(session.segments()), { stripFillers: meta.stripFillers });
+    if (!built.count) return;
+    const file = path.join(meta.dir, 'transcript.md');
+    const tmp = `${file}.${process.pid}.tmp`;
+    // base is what the file held before this capture began: the lines of any
+    // earlier part of the same meeting. The merge is by timestamp.
+    await fsp.writeFile(tmp, appendTranscript(meta.base, built.text));
+    await fsp.rename(tmp, file);
+  })();
+  try { await liveWriting; } finally { liveWriting = null; }
+}
+
+/*
  * Worker stderr, appended to a file beside the settings.
  *
  * Bounded by rewriting the file once it passes the cap rather than by holding
@@ -1589,9 +1636,29 @@ function appendLiveLog(line) {
 
 ipcMain.handle('live-start', async (_evt, opts) => {
   try {
-    const { createLiveSession } = await import('./live.js');
+    const { createLiveSession, toTranscriptResults } = await import('./live.js');
+    const { buildTranscript } = await import('./transcribe.js');
     live?.kill();
-    liveMeta = { title: opts?.title ?? '' };
+    clearTimeout(liveWriteTimer);
+    liveWriteTimer = null;
+    /*
+     * The folder the recorder opened a moment ago. There is one recorder, so
+     * there is at most one capture open, and it was opened before this call.
+     * Without one (a harness driving liveStart alone) the live writer stays off
+     * and the session behaves exactly as it did before.
+     */
+    const liveDir = [...captures.keys()][0] ?? null;
+    const base = liveDir
+      ? await fsp.readFile(path.join(liveDir, 'transcript.md'), 'utf8').catch(() => '')
+      : '';
+    liveMeta = {
+      title: opts?.title ?? '',
+      dir: liveDir,
+      base,
+      build: buildTranscript,
+      toResults: toTranscriptResults,
+      stripFillers: settings.get('stripFillers') !== false,
+    };
     live = createLiveSession({
       // Read once, at the start of the recording. Changing the setting mid-call
       // would make the first half of the transcript disagree with the second.
@@ -1609,8 +1676,8 @@ ipcMain.handle('live-start', async (_evt, opts) => {
        * anyone being able to say why.
        */
       onLog: (line) => appendLiveLog(line),
-      onSegment: (seg) => win?.webContents.send('live-segment', seg),
-      onEcho: (seg) => win?.webContents.send('live-segment', { ...seg, echo: true }),
+      onSegment: (seg) => { win?.webContents.send('live-segment', seg); scheduleLiveWrite(); },
+      onEcho: (seg) => { win?.webContents.send('live-segment', { ...seg, echo: true }); scheduleLiveWrite(); },
       onReady: () => win?.webContents.send('live-status', { state: 'ready' }),
       onProgress: (p) => win?.webContents.send('live-status', { state: 'loading', progress: p }),
       onError: (err) => win?.webContents.send('live-status', {
@@ -1651,6 +1718,11 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
   if (!live) return { ok: false, count: 0 };
   const session = live;
   live = null;
+  // The live writer must not land after the final write below. Its timer is
+  // cancelled, and a write already in flight is waited for.
+  clearTimeout(liveWriteTimer);
+  liveWriteTimer = null;
+  await liveWriting?.catch(() => {});
   try {
     const result = await session.stop();
     const segments = result?.segments ?? [];
@@ -1670,8 +1742,7 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
     if (!built.count) return { ok: false, empty: true, count: 0, segments };
 
     const metaPath = path.join(target, 'meeting.json');
-    const meta = (await readMeta(target)) ?? {};
-
+    const meta = await readMeta(target);
     /*
      * Appended, never overwritten. This is the second or third Stop of one
      * meeting, and the lines from the earlier segments are already in the file;
@@ -1680,8 +1751,29 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
      * doubled transcript.
      */
     const file = path.join(target, 'transcript.md');
-    const existing = await fsp.readFile(file, 'utf8').catch(() => '');
-    await fsp.writeFile(file, appendTranscript(existing, built.text));
+    /*
+     * The base is what the file held BEFORE this capture began, not what it
+     * holds now. During the capture this same file was rewritten every couple
+     * of seconds from the live lines, and a line reclassified as an echo after
+     * the last of those writes would otherwise survive into the final
+     * transcript. When the live writer was not running for this folder, the
+     * file as it stands is the base, exactly as before.
+     */
+    const base = liveMeta?.dir === target
+      ? liveMeta.base
+      : await fsp.readFile(file, 'utf8').catch(() => '');
+    await fsp.writeFile(file, appendTranscript(base, built.text));
+
+    /*
+     * No meeting.json yet means the capture has not been saved: the lines are
+     * written, and nothing else. Writing a stub here used to leave a
+     * meeting.json with no start time, and a later Save or recovery then hit
+     * NOMETA on that folder and could never assemble it. The transcript on disk
+     * is what matters; the record describing it is written when the meeting is.
+     */
+    if (!meta) {
+      return { ok: true, complete: result?.complete === true, count: built.count, deleted: 0, segments, unsaved: true };
+    }
 
     // A live worker that respawned leaves a hole: the audio that played while
     // it was restarting was never transcribed. That is true of a crash and of a

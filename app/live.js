@@ -195,7 +195,10 @@ export function createLiveSession(opts = {}) {
   let stderrTail = '';
   let readyTimer = null;
 
-  const session = { push, stop, kill };
+  // segments() is read-only and a copy: main.js rewrites transcript.md from
+  // it every couple of seconds while the meeting runs, so that anything reading
+  // the folder, the MCP server above all, sees the conversation so far.
+  const session = { push, stop, kill, segments: () => segments.slice() };
   sessions.add(session);
 
   /* ................................................................ worker */

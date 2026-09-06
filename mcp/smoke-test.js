@@ -64,7 +64,32 @@ const FIXTURES = [
   },
 ];
 
+/*
+ * A third folder that is being recorded into right now: a capture marker and a
+ * transcript with two lines, and no meeting.json, which is exactly what the
+ * app leaves on disk between Record and Stop. This is the case Claude Desktop
+ * reads during a meeting, and it must list, read, and say that it is live.
+ */
+const LIVE = {
+  id: '2026-09-06-0930-standup',
+  title: 'Standup',
+  startedAt: Date.UTC(2026, 8, 6, 9, 30),
+  notes: '- ask about the deploy freeze\n',
+  transcript:
+    '[00:00:02] You: Morning, quick one on the deploy freeze.\n' +
+    '[00:00:09] Them: It lifts Thursday, unless legal says otherwise.\n',
+};
+const ALL_IDS = [...FIXTURES.map((f) => f.id), LIVE.id];
+
 async function writeFixture(root) {
+  const liveDir = path.join(root, 'Meetings', LIVE.id);
+  await fsp.mkdir(liveDir, { recursive: true });
+  await fsp.writeFile(path.join(liveDir, 'my-notes.md'), LIVE.notes);
+  await fsp.writeFile(path.join(liveDir, 'transcript.md'), LIVE.transcript);
+  await fsp.writeFile(
+    path.join(liveDir, 'capture.json'),
+    JSON.stringify({ startedAt: LIVE.startedAt, title: LIVE.title, sampleRate: 16000, resume: false, calendarEvent: null }, null, 2) + '\n'
+  );
   for (const m of FIXTURES) {
     const dir = path.join(root, 'Meetings', m.id);
     await fsp.mkdir(dir, { recursive: true });
@@ -128,9 +153,19 @@ async function run(client, root) {
   const list = await say('list_meetings', { limit: 10 });
   const listed = [...list.matchAll(/^- (\S+)$/gm)].map((m) => m[1]).sort();
   const isolated =
-    listed.length === FIXTURES.length && listed.every((id) => FIXTURES.some((f) => f.id === id));
+    listed.length === ALL_IDS.length && listed.every((id) => ALL_IDS.includes(id));
   ok('list_meetings returns the fixture and nothing else', isolated, listed.join(', ') || 'nothing listed');
   ok('list_meetings reports state per meeting', /transcribed, no write-up yet/.test(list));
+
+  // --- the meeting that is being recorded right now ---
+  const liveRow = list.split('\n').find((l) => l.includes(`"${LIVE.title}"`)) ?? '';
+  ok('a folder with a capture marker is listed as recording now', /recording now/.test(liveRow), liveRow.trim());
+  ok('and its length reads in progress, not zero seconds', /in progress/.test(liveRow));
+  const liveRead = await say('read_meeting', { meeting: LIVE.id });
+  ok('read_meeting titles it from the capture marker', liveRead.startsWith(`# ${LIVE.title}`));
+  ok('says the transcript is so far and invites a re-read', /Transcript so far \(still recording; read again/.test(liveRead));
+  ok('with the lines that have landed', liveRead.includes('deploy freeze') && liveRead.includes('lifts Thursday'));
+  ok('and the notes typed so far', /typed so far/.test(liveRead) && liveRead.includes('ask about the deploy freeze'));
   if (!isolated) {
     // Everything below this line writes. If the environment redirect did not
     // take, the folder underneath is the owner's real one, so stop here rather

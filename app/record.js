@@ -1115,15 +1115,23 @@ let lastSavedNotes = null;
  */
 function scheduleNotesSave() {
   clearTimeout(notesTimer);
-  if (recording || !current?.dir) return;
+  /*
+   * This used to bail while recording, because until the capture was saved
+   * there was no folder to write into. The folder now exists from the moment
+   * Record is pressed, so the notes go to disk as they are typed: a crash keeps
+   * them, and anything reading the folder during the meeting (the MCP server,
+   * so Claude Desktop) sees them beside the live transcript.
+   */
+  const dir = current?.dir || (recording ? captureDir : '');
+  if (!dir) return;
   notesTimer = setTimeout(async () => {
     const text = $('notes')?.value ?? '';
     if (text === lastSavedNotes) return;
     try {
       if (typeof api.saveNotes === 'function') {
-        await api.saveNotes(current.dir, text);
-      } else if (!current.written && text.trim()) {
-        await api.saveNote(current.dir, text);
+        await api.saveNotes(dir, text);
+      } else if (!current?.written && text.trim()) {
+        await api.saveNote(dir, text);
       } else {
         return;
       }

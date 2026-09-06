@@ -165,7 +165,9 @@ server.registerTool(
     title: 'List meetings',
     description:
       'List recorded meetings, newest first. Shows which have been transcribed and which ' +
-      'already have a write-up. Use this to find the meeting the user means.',
+      'already have a write-up. A meeting being recorded at this moment is listed as ' +
+      '"recording now": its transcript grows while you read it. Use this to find the meeting ' +
+      'the user means.',
     inputSchema: {
       limit: z.number().int().min(1).max(200).default(20).describe('How many to return'),
     },
@@ -175,13 +177,16 @@ server.registerTool(
     if (!all.length) return text(`No meetings yet. They are recorded into ${MEETINGS_DIR}.`);
 
     const rows = all.slice(0, limit).map((m) => {
-      const state = m.written
-        ? 'written up'
-        : m.transcribed
-          ? 'transcribed, no write-up yet'
-          : 'not transcribed yet';
+      const state = m.recording
+        ? 'recording now'
+        : m.written
+          ? 'written up'
+          : m.transcribed
+            ? 'transcribed, no write-up yet'
+            : 'not transcribed yet';
+      const length = m.recording ? 'in progress' : fmtDur(m.durationSeconds);
       const typed = m.notes.trim() ? `${m.notes.trim().split(/\s+/).length} words of notes` : 'no notes typed';
-      return `- ${m.id}\n    "${m.title}" · ${fmtDate(m.startedAt)} · ${fmtDur(m.durationSeconds)} · ${state} · ${typed}`;
+      return `- ${m.id}\n    "${m.title}" · ${fmtDate(m.startedAt)} · ${length} · ${state} · ${typed}`;
     });
     return text(`${all.length} meeting(s) in ${MEETINGS_DIR}:\n\n${rows.join('\n')}`);
   }
@@ -194,6 +199,8 @@ server.registerTool(
     description:
       "Read one meeting: the notes the user typed during it, the transcript, and any existing " +
       'write-up. Speakers are labelled "You" (the user) and "Them" (everyone else on the call). ' +
+      'If the meeting is being recorded right now, the transcript is what has been said so far ' +
+      'and the notes are what has been typed so far; call again to get the newer lines. ' +
       'Accepts a folder name or part of the title.',
     inputSchema: {
       // min(1) because an empty needle substring-matches every meeting: with one
@@ -206,13 +213,17 @@ server.registerTool(
     const m = await readMeeting((await findMeeting(meeting)).dir);
     const parts = [
       `# ${m.title}`,
-      `${fmtDate(m.startedAt)} · ${fmtDur(m.durationSeconds)} · folder: ${m.id}`,
+      `${fmtDate(m.startedAt)} · ${m.recording ? 'recording now, still in progress' : fmtDur(m.durationSeconds)} · folder: ${m.id}`,
       '',
-      '## Notes the user typed during the meeting',
+      m.recording ? '## Notes the user has typed so far' : '## Notes the user typed during the meeting',
       m.notes.trim() || '(nothing typed)',
     ];
     if (include_transcript) {
-      parts.push('', '## Transcript', m.transcript?.trim() || '(not transcribed yet)');
+      parts.push(
+        '',
+        m.recording ? '## Transcript so far (still recording; read again for newer lines)' : '## Transcript',
+        m.transcript?.trim() || (m.recording ? '(nothing said yet)' : '(not transcribed yet)'),
+      );
     }
     if (m.note) parts.push('', '## Existing write-up', m.note.trim());
     return text(parts.join('\n'));
