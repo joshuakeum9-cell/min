@@ -29,7 +29,10 @@ import {
   nextSegment, withSegment, segmentsOf, appendTranscript, offsetSamples,
 } from './meeting-schema.js';
 import { pendingAlert, nextWakeMs, alertKey } from './meeting-alerts.js';
-import { samplesFromIpc } from './live.js';
+// From the import-free module, deliberately NOT from live.js: importing live.js
+// here would evaluate m0/lib/models.js before the MIN_MODELS_DIR line below
+// runs, and a packaged build would then look for its models inside the asar.
+import { samplesFromIpc } from './ipc-samples.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
