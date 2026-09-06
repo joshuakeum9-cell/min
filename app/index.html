@@ -42,8 +42,8 @@
    * Three typefaces, all SIL OFL and all self-hosted in app/fonts so a launch
    * never reaches a font CDN. Archivo carries the interface. IBM Plex Mono is
    * for anything measured: clocks, timestamps, event times, the status line.
-   * Instrument Serif is the display face for "Coming up" and note titles; the
-   * day numerals are sans 600. It stops the window reading as a settings panel.
+   * Newsreader is the display face for "Coming up" and note titles; the day
+   * numerals are sans 600. It stops the window reading as a settings panel.
    *
    * Dynamic regions (agenda, note list, chips, bubbles) are filled by JS. The
    * class names those modules must emit are listed beside each section so the
@@ -72,9 +72,9 @@
     src:url('./fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
   }
   @font-face {
-    font-family:'Instrument Serif'; font-style:normal; font-display:swap;
+    font-family:'Newsreader'; font-style:normal; font-display:swap;
     font-weight:400;
-    src:url('./fonts/instrument-serif-400-latin.woff2') format('woff2');
+    src:url('./fonts/newsreader-400-latin.woff2') format('woff2');
   }
 
   :root {
@@ -93,7 +93,7 @@
 
     --sans:'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
-    --serif:'Instrument Serif', Georgia, 'Times New Roman', serif;
+    --serif:'Newsreader', Georgia, 'Times New Roman', serif;
 
     /*
      * Six sizes, nothing between them and nothing below 12px. The window had

@@ -157,13 +157,14 @@ publishes, alongside the exact file this app ships and where it came from.
 - **Copyright:** Copyright 2017 IBM Corp., with Reserved Font Name "Plex"
 - **Source:** https://github.com/IBM/plex
 
-### Instrument Serif
+### Newsreader
 
 - **What it does here:** the display face. Two rules reach it: the `h1.display`
   headings, which are "Coming up" and "Settings", and the note title field.
 - **Licence:** SIL Open Font License 1.1
-- **Copyright:** Copyright 2022 The Instrument Serif Project Authors
-- **Source:** https://github.com/Instrument/instrument-serif
+- **Copyright:** Copyright 2020 The Newsreader Project Authors, read from the
+  shipped file's own name table
+- **Source:** https://github.com/productiontype/Newsreader
 
 The OFL requires that the licence accompany the font files, that they are not sold
 on their own, and that a Reserved Font Name is not reused by a modified version.

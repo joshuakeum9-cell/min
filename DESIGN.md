@@ -205,14 +205,19 @@ three documents (`index.html:26`, `indicator.html:19`, `notify.html:23`), so a r
 stylesheet would be blocked anyway. That is the correct outcome for an app whose claim is that
 nothing leaves the machine. `fonts/OFL.txt` carries the full licence text and a copyright line for each
 of the three, and `fonts/README.md` gives the source URL of every file including
-`instrument-serif-400-latin.woff2`. Latin subset only, with fallback stacks in `--sans`,
+`newsreader-400-latin.woff2`. Latin subset only, with fallback stacks in `--sans`,
 `--mono` and `--serif`.
 
 | Face | Token | Files | Role |
 |---|---|---|---|
 | Archivo | `--sans` | one variable file, `archivo-latin-wght.woff2`, 34,928 bytes, `font-weight:100 900`, `font-stretch:100%` | The interface default, set on `body` (`:127`) and restated in every `font` shorthand that is not mono or serif |
 | IBM Plex Mono | `--mono` | two static files, `ibm-plex-mono-400-latin.woff2` 14,708 bytes and `ibm-plex-mono-500-latin.woff2` 14,888 bytes | Anything measured. Weight 500 is used in exactly one rule, `#clock` (`:753`); every other mono rule in every window is 400 |
-| Instrument Serif | `--serif` | one file, `instrument-serif-400-latin.woff2`, 21,032 bytes, weight 400 | `h1.display` and `#noteTitle`, nothing else |
+| Newsreader | `--serif` | one file, `newsreader-400-latin.woff2`, 22,480 bytes, weight 400 | `h1.display` and `#noteTitle`, nothing else |
+
+Newsreader replaced Instrument Serif. Instrument Serif is a condensed design, and at the
+display size the same sentence set 27 percent narrower in it than it does in Newsreader
+(301px against 383px for one 36-character title), which the owner consistently read as the
+headings being squished. No tracking value fixes a face's proportions; the face changed.
 
 All three are `font-style:normal` and `font-display:swap`. Weights actually called on Archivo
 are 400, 500, 600 and 700. Neither of the other two windows loads Archivo: both name the

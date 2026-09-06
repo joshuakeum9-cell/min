@@ -8,8 +8,8 @@ Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Arch
 IBM Plex Mono (ibm-plex-mono-400-latin.woff2, ibm-plex-mono-500-latin.woff2)
 Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
 
-Instrument Serif (instrument-serif-400-latin.woff2)
-Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)
+Newsreader (newsreader-400-latin.woff2)
+Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
