@@ -14,7 +14,7 @@
  * Loaded as a module, so it is deferred and the DOM is parsed before it runs.
  */
 import { initHome, refreshHome } from './home.js';
-import { initNote, openMeeting, newNote, isRecording, startRecording } from './record.js';
+import { initNote, openMeeting, newNote, isRecording, startRecording, flushNoteSaves } from './record.js';
 import { initSettings } from './settings-view.js';
 
 const api = window.api;
@@ -85,7 +85,9 @@ function navigate(view, payload) {
 
   // Runs after the section is visible, so anything measuring itself sees real
   // dimensions rather than the zeros of a display:none subtree.
-  if (view === 'home') refreshHome();
+  // The note pane may owe the disk a title or notes typed in the last second.
+  // Written first, so the list about to be drawn shows what the user just typed.
+  if (view === 'home') flushNoteSaves().catch(() => {}).then(() => refreshHome());
   return true;
 }
 

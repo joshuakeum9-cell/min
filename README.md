@@ -170,6 +170,13 @@ end. MIN also asks Windows not to sleep while a recording runs. The screen may
 still turn off; the machine stays awake, because a laptop that sleeps mid-call
 stops capturing and the meeting's own clock counts the sleep as recorded audio.
 
+**Naming a note.** Type the title whenever you like: before recording, during, or after
+you have stopped and come back to it a week later. It saves as you type, so Home shows the
+new name the moment you go back to it. Until this version the title was written to disk
+exactly once, at Stop, and anything typed after that was quietly lost. The folder on disk
+keeps the name it was created with, which is why a renamed meeting can still sit in a folder
+ending in `-untitled`: every list reads the title from `meeting.json`, never from the path.
+
 **Stop and Resume.** Stop ends the capture, not the note. Press the button again, and the
 recording carries on into the same note as another part of it, whether that is thirty
 seconds or a day later. The button says Resume rather than Record whenever that is what

@@ -957,6 +957,46 @@ ipcMain.handle('save-note', async (_evt, dir, text) => {
  * write-up above: my-notes.md is the skeleton the write-up is built from, so
  * losing one to the other would destroy the input to the whole product.
  */
+/*
+ * The title, whenever it changes.
+ *
+ * It used to reach disk exactly once, inside the save that runs at Stop. A title
+ * typed after that, which is when most people decide what a meeting was about,
+ * went nowhere, and the home list kept saying Untitled. Now the note pane saves
+ * it as it is typed, into meeting.json for a saved meeting and into the capture
+ * marker for one still being recorded, so the list, the MCP server and a
+ * recovery all see the name the user gave it.
+ *
+ * The folder keeps the name it was created with. Every list reads the title from
+ * meeting.json, never from the path, so renaming the directory would buy
+ * nothing the user can see and would cost a rename under a running index, an
+ * MCP server that may hold the path, and a recovery marker that names it.
+ */
+ipcMain.handle('save-title', async (_evt, dir, title) => {
+  const target = confine(dir);
+  const clean = String(title ?? '').trim().slice(0, 200);
+  const meta = await readMeta(target);
+  if (meta) {
+    meta.title = clean || 'Untitled';
+    await fsp.writeFile(path.join(target, 'meeting.json'), JSON.stringify(meta, null, 2) + '\n');
+    if (liveMeta && liveMeta.dir === target) liveMeta.title = meta.title;
+    await reindexSoon();
+    return { title: meta.title, where: 'meeting' };
+  }
+  // Still recording: the marker is what a reader, and a recovery, titles it from.
+  const markerPath = path.join(target, CAPTURE_MARKER);
+  let marker;
+  try {
+    marker = JSON.parse(await fsp.readFile(markerPath, 'utf8'));
+  } catch {
+    throw new Error('That note has nothing on disk yet to name.');
+  }
+  marker.title = clean;
+  await fsp.writeFile(markerPath, JSON.stringify(marker, null, 2) + '\n');
+  if (liveMeta && liveMeta.dir === target) liveMeta.title = clean;
+  return { title: clean, where: 'capture' };
+});
+
 ipcMain.handle('save-notes', async (_evt, dir, text) => {
   const target = confine(dir);
   await fsp.writeFile(path.join(target, 'my-notes.md'), (text ?? '').trimEnd() + '\n');

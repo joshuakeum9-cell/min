@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('api', {
   saveNote: (dir, text) => ipcRenderer.invoke('save-note', dir, text),
   /** The notes the user typed during the call, my-notes.md. Separate file, separate channel. */
   saveNotes: (dir, text) => ipcRenderer.invoke('save-notes', dir, text),
+  /** The title as it is typed, into meeting.json or the capture marker. */
+  saveTitle: (dir, title) => ipcRenderer.invoke('save-title', dir, title),
   openProvider: (id) => ipcRenderer.invoke('open-provider', id),
   openFolder: (dir) => ipcRenderer.invoke('open-folder', dir),
   modelsReady: () => ipcRenderer.invoke('models-ready'),

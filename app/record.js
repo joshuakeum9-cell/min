@@ -776,6 +776,7 @@ async function stopRec() {
       calendarEvent,
     });
     saved = { dir, meta, segment };
+    lastSavedTitle = $('noteTitle')?.value.trim() ?? '';
     current = {
       dir, title: meta.title, startedAt: meta.startedAt, endedAt: meta.endedAt,
       durationSeconds: meta.durationSeconds,
@@ -1113,7 +1114,47 @@ let lastSavedNotes = null;
  * is used only while no write-up exists, so a write-up is never overwritten
  * by a stray keystroke in the notes.
  */
-function scheduleNotesSave() {
+let titleTimer = null;
+let lastSavedTitle = null;
+
+/**
+ * Save the title as it is typed, debounced, and immediately on `change`.
+ *
+ * Nothing listened to this field before. The title reached disk once, inside
+ * the save at Stop, so a title typed afterwards, or corrected afterwards, was
+ * simply not the meeting's title anywhere but on this screen, and Home went on
+ * saying Untitled.
+ */
+function scheduleTitleSave(immediate = false) {
+  clearTimeout(titleTimer);
+  const dir = current?.dir || (recording ? captureDir : '');
+  if (!dir || typeof api.saveTitle !== 'function') return Promise.resolve();
+  const run = async () => {
+    const title = $('noteTitle')?.value.trim() ?? '';
+    if (title === lastSavedTitle) return;
+    try {
+      const r = await api.saveTitle(dir, title);
+      lastSavedTitle = title;
+      if (current && current.dir === dir) current.title = r?.title ?? title;
+    } catch (e) {
+      setStatus('Could not save the title: ' + e.message, 'warn');
+    }
+  };
+  if (immediate) return run();
+  titleTimer = setTimeout(run, 600);
+  return Promise.resolve();
+}
+
+/**
+ * Everything the note pane still owes the disk, written now. The router calls
+ * this on the way to Home, so the list it is about to draw reads the title and
+ * notes the user just typed rather than the ones from 600 ms ago.
+ */
+export async function flushNoteSaves() {
+  await Promise.all([scheduleTitleSave(true), scheduleNotesSave(true)]);
+}
+
+function scheduleNotesSave(immediate = false) {
   clearTimeout(notesTimer);
   /*
    * This used to bail while recording, because until the capture was saved
@@ -1123,8 +1164,8 @@ function scheduleNotesSave() {
    * so Claude Desktop) sees them beside the live transcript.
    */
   const dir = current?.dir || (recording ? captureDir : '');
-  if (!dir) return;
-  notesTimer = setTimeout(async () => {
+  if (!dir) return Promise.resolve();
+  const run = async () => {
     const text = $('notes')?.value ?? '';
     if (text === lastSavedNotes) return;
     try {
@@ -1139,7 +1180,10 @@ function scheduleNotesSave() {
     } catch (e) {
       setStatus('Could not save notes: ' + e.message, 'warn');
     }
-  }, 800);
+  };
+  if (immediate) return run();
+  notesTimer = setTimeout(run, 800);
+  return Promise.resolve();
 }
 
 async function saveWriteUp() {
@@ -1204,7 +1248,10 @@ export function initNote({ api: bridge, onStatus } = {}) {
       setStatus('Could not copy: ' + e.message, 'warn');
     }
   });
-  $('notes')?.addEventListener('input', scheduleNotesSave);
+  $('notes')?.addEventListener('input', () => scheduleNotesSave());
+  $('noteTitle')?.addEventListener('input', () => scheduleTitleSave());
+  // Leaving the field (a click elsewhere, Tab, Enter then blur) saves at once.
+  $('noteTitle')?.addEventListener('change', () => scheduleTitleSave(true));
   $('saveWriteUp')?.addEventListener('click', saveWriteUp);
 
   // Segments stream in only while a session runs, so one subscription for the
@@ -1284,10 +1331,12 @@ export async function openMeeting(meeting) {
   if (!m) { setStatus('That meeting is no longer on disk.', 'warn'); return false; }
 
   clearTimeout(notesTimer);
+  clearTimeout(titleTimer);
   current = m;
   calendarEvent = m.meta?.calendarEvent ?? null;
   const title = $('noteTitle');
   if (title) title.value = m.title ?? '';
+  lastSavedTitle = m.title ?? '';
   const notes = $('notes');
   if (notes) notes.value = m.notes ?? '';
   lastSavedNotes = m.notes ?? '';
@@ -1342,6 +1391,8 @@ export function newNote(prefill) {
   }
 
   clearTimeout(notesTimer);
+  clearTimeout(titleTimer);
+  lastSavedTitle = null;
   captureDir = '';
   current = null;
   currentSegments = [];
