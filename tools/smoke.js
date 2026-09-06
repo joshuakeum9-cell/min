@@ -25,7 +25,7 @@
  * script, no dependency, nothing injected into the app.
  */
 
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -452,6 +452,88 @@ try {
   /* 11 */ const stillThere = await waitForIndicator(false);
   check(stillThere === null, 'floating indicator is gone once recording stops',
     stillThere ? 'indicator.html target survived the stop' : 'target destroyed');
+
+  /*
+   * Live transcription, through the bridge the renderer uses.
+   *
+   * This is the hop that was broken for the whole life of the app while every
+   * other check here passed: frames crossed IPC as ArrayBuffers, main turned
+   * each into an empty Int16Array, and the worker read every one as
+   * end-of-track and finished within fifty milliseconds of loading. Every
+   * probe of live transcription drove live.js from Node and never crossed the
+   * bridge, so nothing caught it. This does: it calls the same three methods
+   * record.js calls, pushes frames the way livePushBlock pushes them, and then
+   * asks whether the worker is still alive.
+   *
+   * Skipped rather than failed when the models are not under models/, because
+   * a 642 MiB download has no place in a smoke test. When they are, the
+   * throwaway profile gets a directory junction to them, removed again with
+   * rmdir, which takes the link and nothing behind it.
+   */
+  const MODELS = path.join(ROOT, 'models');
+  const haveModels = fs.existsSync(path.join(MODELS, 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8'))
+    && fs.existsSync(path.join(MODELS, 'silero_vad_v5.onnx'));
+  if (!haveModels) {
+    skip('live transcription survives real frames', 'speech models are not under models/');
+  } else {
+    const link = path.join(profile, 'models');
+    let linked = false;
+    const frame = (f) => evaluate(`(() => {
+      const a = new Int16Array(4000);
+      for (let i = 0; i < 4000; i++) a[i] = Math.round(8000 * Math.sin(2 * Math.PI * 220 * (${f} * 4000 + i) / 16000));
+      window.api.livePush('you', a.buffer);
+      window.api.livePush('them', new Int16Array(4000).buffer);
+      return true;
+    })()`);
+    try {
+      execSync(`cmd /c mklink /J "${link}" "${MODELS}"`, { stdio: 'ignore' });
+      linked = true;
+      await evaluate(`(() => {
+        window.__smokeLive = { status: [] };
+        window.api.onLiveStatus((s) => window.__smokeLive.status.push(s.state + (s.message ? ':' + s.message : '')));
+        return true;
+      })()`);
+      const started = await evaluate(`window.api.liveStart({ title: 'smoke', offsetSeconds: 0 })`, true);
+      /* 12 */ check(started?.ok === true, 'live transcription starts', JSON.stringify(started));
+
+      // Three seconds of frames while the models load, paced from here rather
+      // than from a renderer timer, which an occluded window throttles.
+      for (let f = 0; f < 12; f++) { await frame(f); await sleep(250); }
+
+      const deadline = Date.now() + 25_000;
+      let states = [];
+      while (Date.now() < deadline) {
+        states = await evaluate('window.__smokeLive.status');
+        if (states.some((st) => st.startsWith('ready') || st.startsWith('error'))) break;
+        await sleep(250);
+      }
+      /* 13 */ check(states.some((st) => st.startsWith('ready')), 'the worker loads its models and reports ready',
+        states.join(' > ') || 'no live-status arrived');
+
+      // Two more seconds after ready. The bug this guards against killed the
+      // worker within fifty milliseconds of it, so surviving these is the test.
+      for (let f = 12; f < 20; f++) { await frame(f); await sleep(250); }
+      states = await evaluate('window.__smokeLive.status');
+
+      const stopped = await evaluate(`window.api.liveStop()`, true);
+      const logFile = path.join(profile, 'live-transcript.log');
+      const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+      const early = (log.match(/finished early/g) ?? []).length;
+      const errored = states.find((st) => st.startsWith('error'));
+      /* 14 */ check(early === 0 && !errored, 'the worker survives the frames it is given',
+        early ? `${early} clean exit(s): frames are reaching it as end-of-track` : (errored ?? 'no restarts, no errors'));
+      /* 15 */ check(stopped?.ok === true, 'live transcription stops cleanly',
+        JSON.stringify({ ok: stopped?.ok, count: stopped?.count, error: stopped?.error ?? null }));
+      /* 16 */ check(/models loaded/.test(log), 'the live log kept the worker\'s first line',
+        log ? `${log.split('\n').filter(Boolean).length} line(s)` : 'log is empty');
+    } catch (e) {
+      check(false, 'live transcription check completed', e.message.split(String.fromCharCode(10))[0]);
+    } finally {
+      // rmdir on a junction removes the link only. The profile is removed by
+      // cleanup() afterwards, and must never be asked to recurse into models/.
+      if (linked) { try { fs.rmdirSync(link); } catch { /* already gone */ } }
+    }
+  }
 } catch (e) {
   check(false, 'harness completed', e.message);
   const tail = (s) => s.split('\n').filter(Boolean).slice(-8).join('\n      ');
