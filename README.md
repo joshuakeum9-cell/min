@@ -211,7 +211,7 @@ across releases:
 
 ```powershell
 Get-FileHash "MIN-Setup.exe" -Algorithm SHA256
-# fef72c6686f8be87a45bc2d68f3e16e0240e4761277aac55c6bfd92e94da6ab0, 116,759,063 bytes
+# 3229851aa45155596344ad0006479e9704d9ab60a339113aad536f433efa5838, 116,759,469 bytes
 ```
 
 That hash is published here and on the same release page as the file it describes, so it catches a
