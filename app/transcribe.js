@@ -28,7 +28,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ensureModel, parakeetPaths, llmPath } from '../m0/lib/models.js';
+import { ensureModel, llmPath } from '../m0/lib/models.js';
 import { detectHardware, isMain } from '../m0/lib/hardware.js';
 import { stripFillers as removeFillers } from './fillers.js';
 import {

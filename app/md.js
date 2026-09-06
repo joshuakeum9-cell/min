@@ -105,25 +105,3 @@ export function renderMarkdown(src) {
   flush();
   return out.join('\n');
 }
-
-/**
- * Timestamped transcript lines, with the speaker made scannable.
- * "You" and "Them" are the only two speakers by construction.
- */
-export function renderTranscript(src) {
-  return esc(src ?? '')
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => {
-      // Two digits or more. hhmmss pads the hour to two but never truncates it,
-      // and a note resumed days later is past 99 hours.
-      const m = l.match(/^\[(\d{2,}:\d{2}:\d{2})\]\s+(You|Them):\s*(.*)$/);
-      if (!m) return `<p class="line">${l}</p>`;
-      const who = m[2] === 'You' ? 'you' : 'them';
-      return (
-        `<p class="line"><span class="ts">${m[1]}</span>` +
-        `<span class="who ${who}">${m[2]}</span>${m[3]}</p>`
-      );
-    })
-    .join('\n');
-}

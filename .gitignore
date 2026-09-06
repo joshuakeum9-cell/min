@@ -34,3 +34,10 @@ results/counterfactual-*/
 .DS_Store
 Thumbs.db
 *.local
+
+# .claude/launch.json IS tracked, so this directory is a committed one and the
+# per-machine file Claude Code writes beside it lands straight in a commit.
+# Named file rather than the whole directory, for the same reason models/ spells
+# its exception out: excluding .claude/ would silently swallow the next config
+# meant to be shared.
+.claude/settings.local.json

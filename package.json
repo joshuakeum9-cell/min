@@ -30,14 +30,14 @@
     "test:live": "node app/live.test.js --fast"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "sherpa-onnx-node": "1.13.7",
-    "zod": "^4.5.4"
+    "sherpa-onnx-node": "1.13.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "electron": "44.1.1",
     "electron-builder": "^26.0.0",
-    "node-llama-cpp": "3.20.0"
+    "node-llama-cpp": "3.20.0",
+    "zod": "^4.5.4"
   },
   "main": "app/main.js",
   "productName": "MIN",

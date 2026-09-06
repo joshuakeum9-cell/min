@@ -858,14 +858,23 @@ ipcMain.handle('copy-prompt', async (_evt, dir) => {
 const INDEX_PATH = path.join(app.getPath('userData'), 'index.db');
 
 ipcMain.handle('list-meetings', async () => {
-  const { listMeetings } = await import('./library.js');
-  const all = await listMeetings();
-  // The renderer only needs enough to draw the list; bodies are fetched on click.
+  /*
+   * listSummaries, not listMeetings. Both return one record per folder, but
+   * listMeetings reads every transcript and every note in the library to do it,
+   * and this handler then throws all of that away: the renderer draws titles and
+   * fetches a body when one is clicked. The summary is meeting.json plus a stat
+   * per file, which is what a list of titles actually costs.
+   */
+  const { listSummaries } = await import('./library.js');
+  const all = await listSummaries();
   return all.map((m) => ({
     id: m.id, dir: m.dir, title: m.title, startedAt: m.startedAt,
     durationSeconds: m.durationSeconds, transcribed: m.transcribed,
     written: m.written, hasAudio: m.hasAudio,
-    noteChars: (m.notes ?? '').trim().length,
+    // Bytes rather than characters, because the question is only whether
+    // anything was typed, and answering it in characters means reading the file.
+    notesBytes: m.notesBytes,
+    transcriptPending: m.transcriptPending,
   }));
 });
 
@@ -1724,6 +1733,9 @@ app.on('before-quit', async () => {
   // depend on whether the worker modules happened to load.
   destroyIndicator();
   closeNotify();
+  // The search index holds an open sqlite handle. Nothing closed it, so it was
+  // released by the process exiting rather than by anyone deciding to.
+  import('./library.js').then((lib) => lib.closeIndex?.()).catch(() => {});
   // Patch the headers of anything still being written, so a quit mid-recording
   // leaves a playable file rather than one recovery has to repair.
   for (const dir of [...captures.keys()]) closeCapture(dir);

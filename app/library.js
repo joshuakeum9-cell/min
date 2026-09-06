@@ -186,14 +186,6 @@ const exists = (file) => fsp.stat(file).then(() => true).catch(() => false);
 const sizeOf = (file) => fsp.stat(file).then((s) => s.size).catch(() => 0);
 
 /**
- * One meeting for the home list: meeting.json plus a stat of each file, and no
- * markdown read at all. Listing used to go through readMeeting, which pulled
- * every transcript in the library into memory to draw a list of titles.
- *
- * Degrades the same way readMeeting does: a missing or corrupt meeting.json is
- * reconstructed from the folder name, and a folder with nothing in it is null.
- */
-/**
  * Does this meeting still have audio on disk?
  *
  * mic.wav answers it for a meeting that was never resumed, and that stat has
@@ -211,6 +203,13 @@ async function anyAudio(dir, meta, micBytes) {
   return sizes.some((n) => n > 44);
 }
 
+/**
+ * One meeting for the home list: meeting.json plus a stat of each file, and no
+ * markdown read at all.
+ *
+ * Degrades the same way readMeeting does: a missing or corrupt meeting.json is
+ * reconstructed from the folder name, and a folder with nothing in it is null.
+ */
 export async function summariseMeeting(dir) {
   const [metaRes, hasTranscript, hasNote, notesBytes, micBytes] = await Promise.all([
     readCapped(path.join(dir, 'meeting.json')),
@@ -259,7 +258,14 @@ export async function summariseMeeting(dir) {
   };
 }
 
-/** Every meeting, newest first, without reading a single markdown file. */
+/**
+ * Every meeting, newest first, without reading a single markdown file.
+ *
+ * This is what the home list is built from. listMeetings, which reads the
+ * bodies, is for the index and for the MCP server, where the bodies are the
+ * point. Drawing a list of titles is not a reason to pull every transcript in
+ * the library into memory.
+ */
 export async function listSummaries() {
   const out = [];
   for (const d of await meetingDirs()) {
