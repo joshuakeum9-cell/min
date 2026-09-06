@@ -49,7 +49,7 @@ been checked against these values.
   and `home.js` gives each one `tabIndex` and `role="button"` (`home.js:315-316`,
   `home.js:402-404`). They are divs, so the treatment is the only thing telling a user they are
   targets. Focus is where the two part company, and not by design: `.event` keeps the global
-  ring, `.note-row` cancels it with `outline:none` and reuses the hover fill. Item 41 below.
+  ring, `.note-row` cancels it with `outline:none` and reuses the hover fill. Item 40 below.
 - **Six font sizes, nothing between them, nothing below 12px.** See the type scale below. This
   is the constraint the file was built around and the one most likely to be broken by accident.
   Two rules currently break it, both added with the agenda pager and the row menu.
@@ -203,10 +203,10 @@ Three typefaces, all under the SIL Open Font License 1.1, all self-hosted in `ap
 launch makes no network request. The Content Security Policy pins `font-src 'self'` in all
 three documents (`index.html:26`, `indicator.html:19`, `notify.html:23`), so a remote
 stylesheet would be blocked anyway. That is the correct outcome for an app whose claim is that
-nothing leaves the machine. `fonts/OFL.txt` carries the full licence text, and `fonts/README.md`
-gives the source of the Archivo and IBM Plex Mono files but not of
-`instrument-serif-400-latin.woff2`, which ships and is used by two rules with no provenance line
-of its own. Latin subset only, with fallback stacks in `--sans`, `--mono` and `--serif`.
+nothing leaves the machine. `fonts/OFL.txt` carries the full licence text and a copyright line for each
+of the three, and `fonts/README.md` gives the source URL of every file including
+`instrument-serif-400-latin.woff2`. Latin subset only, with fallback stacks in `--sans`,
+`--mono` and `--serif`.
 
 | Face | Token | Files | Role |
 |---|---|---|---|
@@ -725,10 +725,7 @@ The tokens are clean. The dead things are selectors.
 39. The IBM Plex Mono 500 file (14,888 bytes) is downloaded for one rule, `#clock` (`:753`).
     Neither of the other two windows uses it. That is a real cost for one element; either more
     mono should be 500 or that one should be 400.
-40. `fonts/README.md` documents the source and licence of Archivo and both IBM Plex Mono files
-    and says nothing about `instrument-serif-400-latin.woff2`, which ships in the same folder and
-    is used by the two most prominent pieces of type in the app.
-41. The two clickable rows disagree about focus. `.event:focus-visible` keeps the global 2px
+40. The two clickable rows disagree about focus. `.event:focus-visible` keeps the global 2px
     `--accent-ink` ring (`:375`), while `.note-row:focus-visible` sets `outline:none` and shows
     the hover fill instead (`:429`). Both are `role="button"` rows built by `home.js` from the
     same idea, so a keyboard user gets a ring on one list and a wash on the other.

@@ -156,6 +156,20 @@ you to get consent when transcribing others. That last one is not legal advice a
 not pretend to be. It is there because a tool that records other people should say so
 where the recording is visible, not only in a settings page nobody opens.
 
+**The audio is on disk before you stop.** A recording is written into its
+folder as it happens, a few seconds at a time, rather than held in memory until
+Stop. Two things follow. If the machine loses power, Windows forces a restart or
+MIN is killed outright, the recording is not lost: the next launch finds the
+part-written files, finishes them into a normal meeting and puts it in the list,
+and the only thing missing is the few seconds since the last write. And a long
+meeting no longer grows in memory, which is what a three-hour recording used to
+do, about 1.3 GiB of it. The cost is that a meeting folder now exists from the
+moment you press Record rather than from the moment you stop, and that if the
+folder cannot be written to, Record refuses to start instead of failing at the
+end. MIN also asks Windows not to sleep while a recording runs. The screen may
+still turn off; the machine stays awake, because a laptop that sleeps mid-call
+stops capturing and the meeting's own clock counts the sleep as recorded audio.
+
 **Stop and Resume.** Stop ends the capture, not the note. Press the button again, and the
 recording carries on into the same note as another part of it, whether that is thirty
 seconds or a day later. The button says Resume rather than Record whenever that is what
@@ -279,6 +293,7 @@ again. Everything else sits outside your Meetings folder, in `%APPDATA%\MIN`, or
 | `mcp-index.db` | The Claude Desktop extension's own copy of that index, written by `mcp/server.js`, so with the extension installed this folder holds two full plaintext copies of every meeting. Separate file so the two processes never rebuild one database at the same time. |
 | `settings.json` | Your settings, in plaintext, including the secret calendar address. Anyone who can read that file can read that calendar. |
 | `calendar-cache.json` | The last calendar fetch, so Home still has an agenda offline. Plaintext meeting titles, times and attendees. |
+| `capture.json`, `capture-mic.part.wav`, `capture-system.part.wav` | Only in a meeting folder, and only while a recording is running or after one was interrupted. The two part files are the real wavs being written into, with their length fields still zero; the marker holds the title, the start time and the sample rate so the recording can be finished without them. If you see these in a folder, that meeting was cut short and MIN will assemble it the next time it starts. |
 | `live-transcript.log` | What the live transcription worker wrote to its error output, appended while a recording runs. A debugging aid rather than a feature: its size is checked once per launch and the file is thrown away if it has passed 256 KB, so a single long session can grow past that and is only trimmed the next time MIN starts, and every failure to write it is swallowed, because a log must never be the reason a meeting is lost. Before it existed, a worker that finished cleanly could be reported as a crash with nothing on disk to say otherwise. |
 | `models\` | The speech models, 642 MiB. |
 | the rest | Electron's own GPU, network and cache directories. |
