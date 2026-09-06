@@ -50,7 +50,7 @@ in a costume. It has not been run against real meetings.
 
 **There is no local LLM.** The original design ran Qwen3-4B on the machine for the
 write-up and `m0/bench-llm.js` killed it, for the reason in the table below. Handing the
-prompt to a subscription you already pay for keeps the installer at about 118 MB rather
+prompt to a subscription you already pay for keeps the installer at about 117 MB rather
 than 3 GB. `grep -rn "llama\|qwen" app/ mcp/` returns nothing, and `node-llama-cpp` is a
 devDependency used only by the `m0/` benchmarks.
 
@@ -203,7 +203,7 @@ focus off the call. It appears when a recording starts and is gone when one ends
 
 Windows x64, from the
 [latest release](https://github.com/joshuakeum9-cell/min/releases/latest):
-`MIN-Setup.exe`, about 118 MB, which Windows Explorer will call 112 MB because it
+`MIN-Setup.exe`, about 117 MB, which Windows Explorer will call 111 MB because it
 counts in binary units. It installs for the current user only, so it never wants an
 administrator password. The filename carries no version, so this direct link keeps working
 across releases:
@@ -211,7 +211,7 @@ across releases:
 
 ```powershell
 Get-FileHash "MIN-Setup.exe" -Algorithm SHA256
-# 6ce1487ea720d38bbed7e8d25b20d60168de4f09cb7f3f534cb5f91d20010858, 118,015,127 bytes
+# e95287304d544ea3884575b0176e178c15c69fe6b0ac8d11f32da331ae5b9da9, 116,757,810 bytes
 ```
 
 That hash is published here and on the same release page as the file it describes, so it catches a
