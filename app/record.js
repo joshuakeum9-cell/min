@@ -452,21 +452,34 @@ async function attach(key, stream) {
  * idle machine and a broken capture are indistinguishable from here. Say which is
  * which instead of guessing, and keep watching rather than crying wolf.
  */
+/*
+ * Four seconds in, say whether the two tracks are alive.
+ *
+ * The microphone is the one that can be wrong: a silent mic four seconds into
+ * a recording is the wrong device or a muted one, and that is worth a warning
+ * and a re-check every two seconds until it clears. System audio is different.
+ * It carries the far end of a call, and it is silent whenever nothing is
+ * playing, which is every solo test anyone ever does. Calling that "wrong
+ * device, or muted", in red, every two seconds, alternating with whatever the
+ * live transcript was trying to say, was noise dressed as a diagnosis. It gets
+ * one calm line, once.
+ */
 function checkSignal() {
-  const problems = [];
-  for (const [key, label] of [['mic', 'your microphone'], ['sys', 'system audio']]) {
-    const t = T[key];
-    if (t.peak >= 1e-4) continue;
-    problems.push(
-      t.frames === 0
-        ? `${label} has delivered no data yet` +
-            (key === 'sys' ? ' (normal if nothing is playing)' : '')
-        : `${label} is delivering audio but it is silent: wrong device, or muted`
-    );
+  const mic = T.mic;
+  if (mic.peak < 1e-4) {
+    setStatus(
+      mic.frames === 0
+        ? 'Your microphone has delivered no audio yet.'
+        : 'Your microphone is delivering audio but it is silent: wrong device, or muted.',
+      'warn');
+    if (recording) capTimer = setTimeout(checkSignal, 2000);
+    return;
   }
-  if (!problems.length) return setStatus('Recording. Both channels have signal.');
-  setStatus(problems.join('. ') + '.', 'warn');
-  if (recording) capTimer = setTimeout(checkSignal, 2000);
+  if (T.sys.peak < 1e-4) {
+    setStatus('Recording. System audio is quiet so far, which is normal when nothing is playing.');
+    return;
+  }
+  setStatus('Recording. Both channels have signal.');
 }
 
 function onDeviceChange() {

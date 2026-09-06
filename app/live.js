@@ -40,6 +40,37 @@ const TRACKS = ['you', 'them'];
 const TRACK_ID = { you: 0, them: 1 };
 const EMPTY = new Int16Array(0);
 
+/**
+ * The renderer's frame, as it arrives in the main process, turned into the
+ * Int16Array the session wants. Returns null for anything that is not a
+ * non-empty, even-length run of bytes.
+ *
+ * The renderer sends an ArrayBuffer. Electron's structured clone hands that to
+ * main as an ArrayBuffer, not as a Uint8Array or a Buffer, and an ArrayBuffer
+ * has no .buffer property. The old handler did
+ * `new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength / 2)`, which with
+ * buf.buffer undefined is `new Int16Array(undefined, ...)`: not an exception,
+ * an EMPTY Int16Array. Every frame therefore reached the worker as a
+ * zero-length frame, and a zero-length frame is the protocol's end-of-track
+ * signal. The worker flushed both tracks and finished, cleanly, within about
+ * fifty milliseconds of loading its models, over and over, and no line of
+ * live transcript was ever produced by the shipped app. This function exists
+ * so that conversion is written once, handles every shape IPC can deliver,
+ * and can be tested without Electron.
+ *
+ * A Buffer view can sit at an odd byte offset inside Node's pool, which the
+ * Int16Array constructor rejects; those are copied to a fresh, aligned buffer.
+ */
+export function samplesFromIpc(buf) {
+  let bytes;
+  if (buf instanceof ArrayBuffer) bytes = new Uint8Array(buf);
+  else if (buf && ArrayBuffer.isView(buf)) bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  else return null;
+  if (bytes.byteLength === 0 || bytes.byteLength % 2 !== 0) return null;
+  if (bytes.byteOffset % 2 !== 0) bytes = bytes.slice();
+  return new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+}
+
 const envWithout = (env, drop) =>
   Object.fromEntries(Object.entries(env).filter(([k]) => !drop.includes(k)));
 
@@ -418,6 +449,10 @@ export function createLiveSession(opts = {}) {
       throw new TypeError('samples must be an Int16Array or Float32Array at 16 kHz mono');
     }
     if (stopping || dead) return Promise.resolve(false);
+    // A zero-length frame is how stop() tells the worker a track has ended.
+    // From a caller it can only be a mistake, and honouring it ends the
+    // transcript mid-meeting, so it is dropped here rather than forwarded.
+    if (samples.length === 0) return Promise.resolve(false);
     return enqueue(track, samples);
   }
 

@@ -29,6 +29,7 @@ import {
   nextSegment, withSegment, segmentsOf, appendTranscript, offsetSamples,
 } from './meeting-schema.js';
 import { pendingAlert, nextWakeMs, alertKey } from './meeting-alerts.js';
+import { samplesFromIpc } from './live.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
@@ -1547,8 +1548,12 @@ function appendLiveLog(line) {
   try {
     if (!liveLogChecked) {
       liveLogChecked = true;
-      const size = fsSync.statSync(LIVE_LOG).size;
-      if (size > LIVE_LOG_MAX) fsSync.rmSync(LIVE_LOG, { force: true });
+      // Its own try: on a fresh profile there is no file to stat, and letting
+      // that throw out of here lost the first line of every new log, which was
+      // the worker's own "models loaded" report.
+      try {
+        if (fsSync.statSync(LIVE_LOG).size > LIVE_LOG_MAX) fsSync.rmSync(LIVE_LOG, { force: true });
+      } catch { /* no file yet */ }
     }
     fsSync.appendFileSync(LIVE_LOG, `${new Date().toISOString()} ${line}\n`);
   } catch { /* a log must never break a recording */ }
@@ -1599,9 +1604,13 @@ ipcMain.handle('live-start', async (_evt, opts) => {
 ipcMain.on('live-push', (_evt, track, buf) => {
   if (!live) return;
   if (track !== 'you' && track !== 'them') return;
-  if (!buf || typeof buf.byteLength !== 'number' || buf.byteLength % 2) return;
+  // samplesFromIpc, and nothing else. The conversion that used to be inline
+  // here produced an empty array for every frame, which is why the shipped app
+  // never transcribed a word live: see the function's own comment.
+  const samples = samplesFromIpc(buf);
+  if (!samples) return;
   try {
-    live.push(track, new Int16Array(buf.buffer, buf.byteOffset, buf.byteLength / 2));
+    live.push(track, samples);
   } catch { /* a dead worker is reported through live-status, not here */ }
 });
 

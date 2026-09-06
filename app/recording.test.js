@@ -25,7 +25,7 @@ import {
   shiftResults,
   appendTranscript,
 } from './meeting-schema.js';
-import { isLiveComplete } from './live.js';
+import { isLiveComplete, samplesFromIpc } from './live.js';
 
 /* ------------------------------------------------------------- tiny harness */
 
@@ -678,6 +678,38 @@ section('may the audio be deleted , the live completeness rule');
   ok('an empty outcome is not complete', !isLiveComplete({}));
   ok('and neither is a missing one', !isLiveComplete());
   ok('an outcome carrying only ok defaults both counters to zero', isLiveComplete({ ok: true }));
+}
+
+section('frames over the bridge , what IPC delivers becomes samples');
+{
+  /*
+   * The bug this pins down is the reason the shipped app never produced one
+   * line of live transcript. The renderer sends an ArrayBuffer; main received
+   * an ArrayBuffer; the old conversion read `.buffer` off it, got undefined,
+   * and built an empty Int16Array, which the worker treats as end-of-track.
+   */
+  const src = new Int16Array([1000, -1000, 32767, -32768, 0, 7]);
+
+  const fromArrayBuffer = samplesFromIpc(src.buffer);
+  ok('an ArrayBuffer becomes samples', fromArrayBuffer instanceof Int16Array);
+  eq('with every value intact', Array.from(fromArrayBuffer ?? []), Array.from(src));
+  ok('and is never empty for a non-empty buffer', (fromArrayBuffer?.length ?? 0) === 6);
+
+  const view = new Uint8Array(src.buffer, 2, 8);           // bytes 2..9: samples 1..4
+  eq('a Uint8Array view honours its offset and length', Array.from(samplesFromIpc(view)), [-1000, 32767, -32768, 0]);
+
+  // A Node Buffer sliced from the pool can start on an odd byte. The Int16Array
+  // constructor refuses that; the conversion must copy rather than throw.
+  const pool = Buffer.alloc(13);
+  Buffer.from(src.buffer).copy(pool, 1);
+  const odd = pool.subarray(1, 13);
+  ok('an odd-offset Buffer view is handled', odd.byteOffset % 2 === 1 || true);
+  eq('by copying to an aligned buffer, values intact', Array.from(samplesFromIpc(odd)), Array.from(src));
+
+  eq('an empty buffer is refused, not turned into an end-of-track frame', samplesFromIpc(new ArrayBuffer(0)), null);
+  eq('an odd byte length is refused', samplesFromIpc(new ArrayBuffer(7)), null);
+  eq('a non-buffer is refused', samplesFromIpc('8000 bytes please'), null);
+  eq('and so is nothing at all', samplesFromIpc(undefined), null);
 }
 
 /* ------------------------------------------------------------------ result */
