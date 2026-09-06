@@ -135,10 +135,11 @@ MIT licensed (https://github.com/nodejs/node).
 
 ## Fonts bundled with the app
 
-Both faces are vendored into `app/fonts/` as unmodified `.woff2` files, so they are
-redistributed with the app rather than fetched from a font CDN at runtime. The full
-licence text for both ships beside them at `app/fonts/OFL.txt`, which is what the
-OFL requires.
+All three faces are vendored into `app/fonts/` as unmodified `.woff2` files, so they
+are redistributed with the app rather than fetched from a font CDN at runtime. The
+full licence text for all three ships beside them at `app/fonts/OFL.txt`, which is
+what the OFL requires. Each copyright line below is the one its upstream project
+publishes, alongside the exact file this app ships and where it came from.
 
 ### Archivo
 
@@ -156,10 +157,19 @@ OFL requires.
 - **Copyright:** Copyright 2017 IBM Corp., with Reserved Font Name "Plex"
 - **Source:** https://github.com/IBM/plex
 
+### Instrument Serif
+
+- **What it does here:** the display face. Two rules reach it: the `h1.display`
+  headings, which are "Coming up" and "Settings", and the note title field.
+- **Licence:** SIL Open Font License 1.1
+- **Copyright:** Copyright 2022 The Instrument Serif Project Authors
+- **Source:** https://github.com/Instrument/instrument-serif
+
 The OFL requires that the licence accompany the font files, that they are not sold
 on their own, and that a Reserved Font Name is not reused by a modified version.
-Neither font is modified here, so "Plex" is not being reused as a name. Bundling
-OFL fonts inside an application is explicitly permitted.
+None of the three is modified here, so "Plex", the only reserved name among them,
+is not being reused. Bundling OFL fonts inside an application is explicitly
+permitted.
 
 ---
 

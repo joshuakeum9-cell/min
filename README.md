@@ -83,11 +83,14 @@ sign-in. In Google Calendar the path is **Settings > your calendar > "Secret add
 iCal format"**. Paste that URL, press Test connection, and Home fills in. There is no
 Google sign-in, no OAuth, no consent screen and no app verification, because MIN is only
 an HTTPS client fetching one URL, and the same field takes an Outlook, iCloud or Fastmail
-address. It must be `https`, so a `webcal://` link needs its scheme swapped, and the app
-says so. Refresh is every 5, 15 (the default), 30 or 60 minutes. That URL is a bearer
-credential, readable by anyone who has it, so it is kept by the main process in the
-settings file rather than in the renderer, and no error message or log ever prints it.
-Cancelled events are dropped.
+address. It must be `https`, and a `webcal://` link is that same address under another
+scheme, so pasting one swaps the scheme for you and puts the rewritten address back in the
+field where you can see it, rather than refusing it and making you do it. Refresh is every
+5, 15 (the default), 30 or 60 minutes. That URL is a bearer credential, readable by anyone
+who has it, so it is kept by the main process in the settings file rather than in the
+renderer, and no error message or log ever prints it. Cancelled events are dropped. A feed
+over 4 MB is refused, and nothing in Settings lifts that ceiling: a year of a busy Google
+calendar is well under 1 MB, so a file that size is a runaway rather than a full diary.
 
 **Which notes belong to a meeting.** "+ New note" is impromptu. It adopts no calendar
 meeting, and pressing Record no longer attaches one either. **This is a change from
@@ -145,12 +148,13 @@ disfluencies to begin with, and that has not yet been measured against a real me
 
 **The transcript card.** It sits between your notes and the bottom bar, opened and closed
 by the waveform button, and stays put while the notes scroll under it. Type in its search
-box to filter to matching lines with the match highlighted, click any line to copy it in
-the file's own `[hh:mm:ss] Me:` format, and the footer carries the same Stop the bar does
-plus a line asking you to get consent when transcribing others. That last one is not
-legal advice and does not pretend to be. It is there because a tool that records other
-people should say so where the recording is visible, not only in a settings page nobody
-opens.
+box to filter to matching lines with the match highlighted, and click any line to copy it
+as `[hh:mm:ss] Me: ...`, worded the way the bubble you clicked is worded rather than the
+way the file is: `transcript.md`, and the Copy button that takes the whole transcript at
+once, say `You:` instead. The footer carries the same Stop the bar does plus a line asking
+you to get consent when transcribing others. That last one is not legal advice and does
+not pretend to be. It is there because a tool that records other people should say so
+where the recording is visible, not only in a settings page nobody opens.
 
 **Stop and Resume.** Stop ends the capture, not the note. Press the button again, and the
 recording carries on into the same note as another part of it, whether that is thirty
@@ -185,11 +189,10 @@ focus off the call. It appears when a recording starts and is gone when one ends
 
 Windows x64, from the
 [latest release](https://github.com/joshuakeum9-cell/min/releases/latest):
-`MIN-Setup.exe`, about 118 MB, which Windows Explorer will call 113 MB because it
+`MIN-Setup.exe`, about 118 MB, which Windows Explorer will call 112 MB because it
 counts in binary units. It installs for the current user only, so it never wants an
-administrator password, and the models, Parakeet TDT 0.6B v3 and Silero VAD, arrive on
-first launch. The filename carries no version, so this direct link keeps working across
-releases:
+administrator password. The filename carries no version, so this direct link keeps working
+across releases:
 `https://github.com/joshuakeum9-cell/min/releases/latest/download/MIN-Setup.exe`
 
 ```powershell
@@ -207,6 +210,14 @@ costs money and this is a personal project given away for free. You will see a b
 antivirus engines flag unsigned Electron installers too; a quarantine notice means a
 heuristic fired, not that anything was found. If that trade is not one you want, build
 `dist/MIN-Setup.exe` yourself with `npm install && npm run dist`.
+
+**Press Record once before you need it.** The speech models are not in the installer, so
+`%APPDATA%\MIN\models` starts empty and Parakeet TDT 0.6B v3 and Silero VAD, 642 MiB
+between them, are downloaded the first time you press Record, once and never again. With
+live transcription switched off it is the first Write up instead. Either way that first
+press is usually the moment a meeting is starting, which is the worst moment to wait for
+642 MiB. Start a recording you do not need, on a connection you like, let the download
+finish, then stop it. After that, recording and transcription work offline.
 
 **Getting the write-up back, two routes, no API key.** Pick Claude, ChatGPT, Gemini,
 Copilot, Perplexity, Grok, Le Chat or DeepSeek: the app copies a ready-made prompt, opens

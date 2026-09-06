@@ -278,7 +278,7 @@
       </div>
       <div class="card">
         <h3>A transcript you can work with</h3>
-        <p>Search inside it and matching lines stay with the match highlighted. Click any line to copy it in the file's own format. And a reminder to get consent when transcribing others, where the recording is visible rather than buried in a settings page.</p>
+        <p>Search inside it and matching lines stay with the match highlighted. Click any line to copy it with its timestamp, labelled the way the bubble beside it is labelled, so your own lines read Me. The saved transcript, and the button that copies the whole transcript at once, say You instead. And a reminder to get consent when transcribing others, where the recording is visible rather than buried in a settings page.</p>
       </div>
       <div class="card">
         <h3>Everything is one search away</h3>
@@ -303,7 +303,7 @@
           <tr><td>Transcription speed</td><td>9.8x real time at the 30-second chunk the app uses, and about 10x to 13x end to end, so 4.5 to 6 minutes per hour of audio. Longer chunks are slower, about 5.6x at 360 seconds, and 398 seconds is a hard ceiling the recogniser aborts on. A full hour has not been run end to end, and a 4-core laptop should expect nearer 7 to 9 minutes</td></tr>
           <tr><td>Storage, 1 000 hours</td><td>~95 MB of markdown, calculated from transcript sizes rather than timed. Audio is deleted after transcription</td></tr>
           <tr><td>Speaker attribution</td><td>Exact, from separate tracks. No diarization model involved</td></tr>
-          <tr><td>Installer</td><td>About 118 MB. Speech models download once on first run, 642 MiB</td></tr>
+          <tr><td>Installer</td><td>About 118 MB. The speech models are not in it: 642 MiB downloads once, the first time you press Record</td></tr>
           <tr><td>Where things live</td><td>Meetings are markdown in a folder you own. Models, the search index, the MCP index, your settings and the cached calendar sit in <code>%APPDATA%\MIN</code>, plaintext and searchable. Uninstalling deliberately removes neither, so notes are never destroyed on the way out</td></tr>
           <tr><td>Live transcript</td><td>Written as the meeting runs, from the two tracks, with no diarization model. Lines appear when a speaker pauses, so a short remark lands a second or two behind and a single utterance is capped at 20 seconds. It can be switched off, and then the transcript is written after you stop</td></tr>
           <tr><td>Calendar</td><td>Optional. One secret iCal address, pasted in Settings, fetched over HTTPS every 5 to 60 minutes. No sign-in, no OAuth, no account. The next 14 days appear on the home screen, five meetings at a time, and a note opened from one of them takes its title and attendees</td></tr>
@@ -327,7 +327,7 @@
           <li>Download <code>MIN-Setup.exe</code> and double-click it.</li>
           <li>Windows will show a blue <strong>“Windows protected your PC”</strong> screen. Click <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
           <li>Follow the installer. It adds a Start menu entry and a desktop shortcut.</li>
-          <li>On first launch it downloads 642 MiB of speech models, once. Only after that do recording and transcription work offline.</li>
+          <li>The speech models are not in the installer. The first time you press Record, MIN downloads 642 MiB of them, once and never again. That press is usually the moment a meeting starts, so make a throwaway recording before you need one and stop it again. Only after that do recording and transcription work offline.</li>
         </ol>
         <div class="cta-row" style="margin-top:28px">
           <a class="btn brand" href="https://github.com/joshuakeum9-cell/min/releases/latest/download/MIN-Setup.exe">Download for Windows</a>
@@ -342,7 +342,7 @@
       <aside class="warn">
         <p style="margin:0 0 12px"><strong>About that warning</strong></p>
         <p style="margin:0 0 12px">The installer is unsigned: a signing certificate costs money every year and this is a free personal project. Unsigned means Windows cannot confirm who published it, not that anything is wrong with it. Some antivirus engines flag unsigned Electron installers too, usually as a generic heuristic rather than a named threat.</p>
-        <p style="margin:0">Check what you downloaded: 118,015,127 bytes, SHA-256 <code>6ce1487ea720d38bbed7e8d25b20d60168de4f09cb7f3f534cb5f91d20010858</code>. That hash is published here and on the same release page as the file it describes, so it catches a corrupted or truncated download but not a substituted one, and it is no substitute for a code signature. Windows Explorer shows 113 MB because it counts in binary units. Or build it yourself with <code>npm run dist</code>: a file you built has no mark of the web, so SmartScreen stays quiet, though the result is unsigned too and an antivirus heuristic can still reach it.</p>
+        <p style="margin:0">Check what you downloaded: 118,015,127 bytes, SHA-256 <code>6ce1487ea720d38bbed7e8d25b20d60168de4f09cb7f3f534cb5f91d20010858</code>. That hash is published here and on the same release page as the file it describes, so it catches a corrupted or truncated download but not a substituted one, and it is no substitute for a code signature. Windows Explorer shows 112 MB because it counts in binary units. Or build it yourself with <code>npm run dist</code>: a file you built has no mark of the web, so SmartScreen stays quiet, though the result is unsigned too and an antivirus heuristic can still reach it.</p>
       </aside>
     </div>
   </div>
