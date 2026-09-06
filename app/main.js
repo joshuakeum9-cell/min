@@ -1033,7 +1033,32 @@ ipcMain.handle('app-version', () => app.getVersion());
 const settings = createSettings(path.join(app.getPath('userData'), 'settings.json'));
 
 ipcMain.handle('settings-get', () => settings.all());
-ipcMain.handle('settings-set', (_evt, patch) => settings.set(patch));
+/*
+ * A failed save is written down before it is reported.
+ *
+ * The owner entered a calendar address at least twice, saw the calendar fill in
+ * both times, and both times the address was gone at the next launch: the
+ * settings file on disk kept a value from an earlier build while the running
+ * process held the new one in memory. Every save path driven in a test
+ * persisted. What the process itself saw when its write failed was shown once,
+ * in a status line in the Settings pane, and then lost. The machine runs a
+ * third-party antivirus that watches unsigned executables, and this app is
+ * unsigned, so a blocked rename is the leading explanation; but "leading" is not
+ * "known", and the way to know is to keep the error. settings.log sits beside
+ * the file that would not save, with the error code the OS gave.
+ */
+const SETTINGS_LOG = path.join(app.getPath('userData'), 'settings.log');
+
+ipcMain.handle('settings-set', (_evt, patch) => {
+  try {
+    return settings.set(patch);
+  } catch (err) {
+    const keys = patch && typeof patch === 'object' ? Object.keys(patch).join(',') : typeof patch;
+    const line = `${new Date().toISOString()} save failed for [${keys}]: ${err?.code ?? 'no code'} ${err?.message ?? err}\n`;
+    try { fsSync.appendFileSync(SETTINGS_LOG, line); } catch { /* the failure itself still reaches the user below */ }
+    throw err;
+  }
+});
 
 /* --------------------------------------------------------------- indicator */
 
