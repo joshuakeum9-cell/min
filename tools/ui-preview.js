@@ -205,13 +205,14 @@ const STUB_JS = `
         score: -1,
       }));
     },
+    captureBegin: async (p) => ({ dir: p?.dir ?? '/m/new' }),
+    captureAppend: async () => ({ ok: true }),
     saveMeeting: async (p) => ({
       dir: '/m/new',
       meta: { durationSeconds: Math.max(0, (p.endedAt - p.startedAt) / 1000),
         tracks: { mic: { silent: false, voicedSeconds: 12 }, system: { silent: false, voicedSeconds: 9 } } },
     }),
     saveNote: async (_dir, text) => ({ chars: (text ?? '').length }),
-    deleteMeeting: async () => true,
     transcribe: async () => ({ count: 5, ok: true, echoes: 0 }),
     copyPrompt: async () => ({ words: 3200 }),
     openProvider: async () => {},
@@ -233,7 +234,6 @@ const STUB_JS = `
         count: AGENDA.reduce((n, d) => n + d.events.length, 0) };
     },
     calendarUpcoming: async ({ days = 7 } = {}) => AGENDA.slice(0, Math.max(1, days)),
-    calendarEventNow: async () => EVENT_NOW,
     onCalendarUpdated: subscribe(listeners.calendar),
 
     /* live transcript: no audio is read, segments arrive on a timer */

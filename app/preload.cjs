@@ -43,7 +43,6 @@ contextBridge.exposeInMainWorld('api', {
   saveNote: (dir, text) => ipcRenderer.invoke('save-note', dir, text),
   /** The notes the user typed during the call, my-notes.md. Separate file, separate channel. */
   saveNotes: (dir, text) => ipcRenderer.invoke('save-notes', dir, text),
-  deleteMeeting: (dir) => ipcRenderer.invoke('delete-meeting', dir),
   openProvider: (id) => ipcRenderer.invoke('open-provider', id),
   openFolder: (dir) => ipcRenderer.invoke('open-folder', dir),
   modelsReady: () => ipcRenderer.invoke('models-ready'),
@@ -56,7 +55,6 @@ contextBridge.exposeInMainWorld('api', {
 
   calendarRefresh: () => ipcRenderer.invoke('calendar-refresh'),
   calendarUpcoming: (opts) => ipcRenderer.invoke('calendar-upcoming', opts),
-  calendarEventNow: () => ipcRenderer.invoke('calendar-event-now'),
   onCalendarUpdated: (cb) => subscribe('calendar-updated', cb),
 
   liveStart: (opts) => ipcRenderer.invoke('live-start', opts),
@@ -94,6 +92,17 @@ contextBridge.exposeInMainWorld('api', {
    *          title:string}} payload  you/them are 0..1 audio levels.
    */
   recordingState: (payload) => ipcRenderer.send('recording-state', payload),
+  /**
+   * Open the meeting folder and start writing audio into it. Returns the folder,
+   * which every later captureAppend and the final saveMeeting must quote.
+   */
+  captureBegin: (payload) => ipcRenderer.invoke('capture-begin', payload),
+  /**
+   * Hand over one flush of 16-bit PCM for one track. Resolves with { ok }
+   * rather than rejecting: a failed write is a gap in a recording that is still
+   * running, not a reason to stop it.
+   */
+  captureAppend: (dir, track, bytes) => ipcRenderer.invoke('capture-append', dir, track, bytes),
   /**
    * The user pressed "Take notes" on a meeting prompt. The payload is the
    * calendar occurrence, so the note it opens is that meeting's.

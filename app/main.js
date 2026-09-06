@@ -13,7 +13,7 @@
  *     meeting.json     timings, devices, gap markers, integrity check
  */
 
-import { app, BrowserWindow, Menu, screen, session, desktopCapturer, ipcMain, shell, clipboard } from 'electron';
+import { app, BrowserWindow, Menu, screen, session, desktopCapturer, ipcMain, shell, clipboard, powerSaveBlocker } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
@@ -44,7 +44,7 @@ export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
  *
  * The root itself is a special case, and it is only ever allowed on request.
  * open-folder needs it, because opening the library is exactly what its button
- * does. delete-meeting must not have it: one IPC call naming the root would
+ * does. trash-meeting must not have it: one IPC call naming the root would
  * otherwise send every meeting the user owns to the recycle bin, so it takes the
  * default and only accepts a folder below the root.
  *
@@ -215,12 +215,20 @@ function createWindow() {
  * 16-bit PCM WAV. Written by hand because the alternative is a dependency for
  * 44 bytes of header.
  */
-function encodeWav(float32, sampleRate) {
-  const n = float32.length;
-  const buf = Buffer.alloc(44 + n * 2);
+/**
+ * The 44 bytes in front of every wav this app writes: mono, 16-bit, PCM.
+ *
+ * Split out because two writers need it. encodeWav below knows the length up
+ * front; the streaming capture does not, and writes this with zeros, then
+ * patches the same two fields once the recording stops. Sharing the header
+ * means a change to the format cannot reach one writer and miss the other.
+ */
+const WAV_HEADER_BYTES = 44;
 
+function wavHeader(dataBytes, sampleRate) {
+  const buf = Buffer.alloc(WAV_HEADER_BYTES);
   buf.write('RIFF', 0);
-  buf.writeUInt32LE(36 + n * 2, 4);
+  buf.writeUInt32LE(36 + dataBytes, 4);
   buf.write('WAVE', 8);
   buf.write('fmt ', 12);
   buf.writeUInt32LE(16, 16); // PCM chunk size
@@ -231,11 +239,18 @@ function encodeWav(float32, sampleRate) {
   buf.writeUInt16LE(2, 32); // block align
   buf.writeUInt16LE(16, 34); // bits per sample
   buf.write('data', 36);
-  buf.writeUInt32LE(n * 2, 40);
+  buf.writeUInt32LE(dataBytes, 40);
+  return buf;
+}
+
+function encodeWav(float32, sampleRate) {
+  const n = float32.length;
+  const buf = Buffer.alloc(WAV_HEADER_BYTES + n * 2);
+  wavHeader(n * 2, sampleRate).copy(buf, 0);
 
   for (let i = 0; i < n; i++) {
     const s = Math.max(-1, Math.min(1, float32[i]));
-    buf.writeInt16LE(Math.round(s * 32767), 44 + i * 2);
+    buf.writeInt16LE(Math.round(s * 32767), WAV_HEADER_BYTES + i * 2);
   }
   return buf;
 }
@@ -290,8 +305,389 @@ async function readMeta(dir) {
   }
 }
 
+/*
+ * Stop Windows going to sleep while a recording runs.
+ *
+ * A laptop that sleeps mid-meeting stops feeding the capture, and because the
+ * meeting's length is measured from wall time, the sleep was counted as
+ * recorded audio: a lid closed for forty minutes produced a meeting claiming
+ * forty extra minutes it never heard. deficitSeconds in the track metadata
+ * showed it after the fact, but nothing prevented it.
+ *
+ * 'prevent-app-suspension' rather than 'prevent-display-sleep': the screen is
+ * free to turn off, which is what a user recording a call expects, but the
+ * machine stays awake enough to keep the audio graph running.
+ */
+let sleepBlocker = null;
+
+function applySleepBlock(on) {
+  try {
+    if (on && sleepBlocker === null) {
+      sleepBlocker = powerSaveBlocker.start('prevent-app-suspension');
+    } else if (!on && sleepBlocker !== null) {
+      powerSaveBlocker.stop(sleepBlocker);
+      sleepBlocker = null;
+    }
+  } catch {
+    // Losing this costs a sleeping laptop a gap, not the recording. It is not
+    // worth failing a meeting over.
+    sleepBlocker = null;
+  }
+}
+
+/* ------------------------------------------------------- capture streaming */
+
+/*
+ * Audio reaches disk while the meeting is still running.
+ *
+ * It used to reach disk only at Stop. Every sample sat in the renderer as
+ * Float32 until then, which meant two things nobody wanted: a crash, a power
+ * cut or a forced restart lost the entire meeting, and the save itself briefly
+ * held two copies, so the three hours MAX_MINUTES allows peaked around 2.6 GiB
+ * on a machine this app targets at 8 GB. One change fixes both. The renderer
+ * hands over a few seconds at a time and releases what it handed over; this
+ * appends it straight into the meeting's own wav.
+ *
+ * The file being written IS the final wav, not a temporary format that gets
+ * converted later. Its header goes down first with zero lengths and is patched
+ * when the capture finishes. That is what makes an interrupted recording
+ * recoverable: every sample is already in place and only the two length fields
+ * are wrong, which recoverCaptures() repairs from the file's real size.
+ *
+ * The part files are named, not hidden. A folder with capture-mic.part.wav in
+ * it is a recording that did not finish, and that is worth being able to see.
+ */
+const CAPTURE_MARKER = 'capture.json';
+const CAPTURE_PARTS = { mic: 'capture-mic.part.wav', system: 'capture-system.part.wav' };
+
+/** dir -> the capture running there. At most one, because there is one recorder. */
+const captures = new Map();
+
+async function openPart(dir, name, sampleRate) {
+  const file = path.join(dir, name);
+  const fh = await fsp.open(file, 'w');
+  await fh.write(wavHeader(0, sampleRate), 0, WAV_HEADER_BYTES, 0);
+  return { file, fh, bytes: 0 };
+}
+
+/**
+ * Begin writing a capture into `dir`, creating the meeting folder when this is
+ * a first capture rather than a Resume.
+ *
+ * Failing here fails the recording, deliberately. A recording that cannot reach
+ * disk cannot be saved either, and finding that out now costs the user nothing,
+ * while finding it out at Stop costs them the meeting.
+ */
+ipcMain.handle('capture-begin', async (_evt, payload = {}) => {
+  const { dir: into, startedAt, title, sampleRate, calendarEvent } = payload;
+  const sr = Number(sampleRate);
+  if (!Number.isFinite(sr) || sr <= 0) throw new Error('capture-begin needs a sample rate');
+
+  let target;
+  if (into) {
+    target = confine(into);
+    const meta = await readMeta(target);
+    if (!meta) throw new Error('That meeting folder has no meeting.json, so there is nothing to resume.');
+  } else {
+    const base = confine(path.join(MEETINGS_DIR, folderName(startedAt, title)));
+    await fsp.mkdir(MEETINGS_DIR, { recursive: true });
+    target = await uniqueDir(base);
+  }
+
+  // One recorder, so a capture already open on this folder is a leftover from a
+  // path that threw. Close it rather than leaking the handles.
+  await closeCapture(target).catch(() => {});
+
+  const tracks = {
+    mic: await openPart(target, CAPTURE_PARTS.mic, sr),
+    system: await openPart(target, CAPTURE_PARTS.system, sr),
+  };
+  captures.set(target, { sampleRate: sr, startedAt, tracks });
+
+  /*
+   * The marker is what makes recovery possible. meeting.json is not written
+   * until Stop, so without this a folder found at the next launch would have
+   * two wavs, no title, no start time and no way to tell a dead recording from
+   * a half-written one.
+   */
+  await fsp.writeFile(path.join(target, CAPTURE_MARKER), JSON.stringify({
+    startedAt, title: title ?? '', sampleRate: sr,
+    resume: Boolean(into),
+    calendarEvent: calendarEvent && typeof calendarEvent === 'object' ? calendarEvent : null,
+  }, null, 2) + '\n');
+
+  return { dir: target };
+});
+
+/**
+ * One flush from the renderer: 16-bit PCM for one track, already in the format
+ * the file wants, appended at the end.
+ *
+ * Never throws at the renderer. A recording that keeps going with a gap is
+ * better than one that stops because a single write failed, so the failure is
+ * reported in the return value and the recorder decides what to say about it.
+ */
+ipcMain.handle('capture-append', async (_evt, dirIn, track, bytes) => {
+  const cap = captures.get(confine(dirIn));
+  const t = cap?.tracks?.[track];
+  if (!t) return { ok: false, error: 'no capture is open for that folder' };
+  try {
+    const buf = Buffer.from(bytes.buffer ?? bytes, bytes.byteOffset ?? 0, bytes.byteLength ?? bytes.length);
+    await t.fh.write(buf, 0, buf.length, WAV_HEADER_BYTES + t.bytes);
+    t.bytes += buf.length;
+    return { ok: true, bytes: t.bytes };
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+});
+
+/** Patch both headers, close both handles, and forget the capture. */
+async function closeCapture(dir) {
+  const cap = captures.get(dir);
+  if (!cap) return null;
+  captures.delete(dir);
+  const out = {};
+  for (const [name, t] of Object.entries(cap.tracks)) {
+    try {
+      await t.fh.write(wavHeader(t.bytes, cap.sampleRate), 0, WAV_HEADER_BYTES, 0);
+    } catch { /* the close below still leaves a file recoverCaptures can repair */ }
+    try { await t.fh.close(); } catch {}
+    out[name] = { file: t.file, bytes: t.bytes };
+  }
+  return { sampleRate: cap.sampleRate, startedAt: cap.startedAt, tracks: out };
+}
+
+/**
+ * The same numbers trackMeta produces, read back off the disk rather than out
+ * of an array in memory.
+ *
+ * Streamed in 1 MiB pieces because the whole point of writing as we go is not
+ * to hold a meeting in memory, and loading it back to measure it would undo
+ * that. The 20 ms voiced window straddles those pieces, so the tail of each
+ * read is carried into the next; without that carry the window count drifts by
+ * one per megabyte and voicedSeconds would quietly read low.
+ */
+async function trackMetaFromWav(file, sampleRate, wallSeconds) {
+  const window = Math.max(1, Math.floor(sampleRate * 0.02));
+  let peak = 0, sumSq = 0, count = 0, voiced = 0;
+  let carry = new Float32Array(0);
+
+  const fh = await fsp.open(file, 'r').catch(() => null);
+  if (!fh) return trackMeta(new Float32Array(0), sampleRate, wallSeconds);
+  try {
+    const size = (await fh.stat()).size;
+    const chunk = Buffer.alloc(1024 * 1024);
+    let at = WAV_HEADER_BYTES;
+    while (at < size) {
+      const { bytesRead } = await fh.read(chunk, 0, Math.min(chunk.length, size - at), at);
+      if (!bytesRead) break;
+      at += bytesRead;
+      const n = Math.floor(bytesRead / 2);
+      const samples = new Float32Array(carry.length + n);
+      samples.set(carry, 0);
+      for (let i = 0; i < n; i++) samples[carry.length + i] = chunk.readInt16LE(i * 2) / 32767;
+
+      for (let i = carry.length; i < samples.length; i++) {
+        const a = Math.abs(samples[i]);
+        if (a > peak) peak = a;
+        sumSq += samples[i] * samples[i];
+      }
+      count += n;
+
+      let i = 0;
+      for (; i + window <= samples.length; i += window) {
+        let w = 0;
+        for (let k = 0; k < window; k++) w += samples[i + k] * samples[i + k];
+        if (Math.sqrt(w / window) > 0.002) voiced++;
+      }
+      carry = samples.slice(i);
+    }
+  } finally {
+    await fh.close().catch(() => {});
+  }
+
+  const capturedSeconds = count / sampleRate;
+  return {
+    capturedSeconds: +capturedSeconds.toFixed(3),
+    deficitSeconds: +(wallSeconds - capturedSeconds).toFixed(3),
+    peak: +peak.toFixed(5),
+    rms: +Math.sqrt(sumSq / Math.max(1, count)).toFixed(5),
+    voicedSeconds: +((voiced * window) / sampleRate).toFixed(2),
+    silent: peak < 1e-4,
+  };
+}
+
+/**
+ * Finish the recordings that never got to finish themselves.
+ *
+ * Runs once at launch, before the window opens. A folder holding a capture
+ * marker is a meeting that was interrupted: the app was killed, the machine
+ * lost power, Windows restarted underneath it. The samples are on disk, so the
+ * meeting is not lost unless nothing ever puts a meeting.json beside them.
+ *
+ * Deliberately silent about folders it cannot repair. This runs on the path to
+ * showing a window, and a user who has just had a power cut should get their
+ * app, with whatever could be saved already saved.
+ */
+async function recoverCaptures() {
+  let recovered = 0;
+  const dirs = await fsp.readdir(MEETINGS_DIR, { withFileTypes: true }).catch(() => []);
+  for (const entry of dirs) {
+    if (!entry.isDirectory()) continue;
+    const dir = path.join(MEETINGS_DIR, entry.name);
+    const markerPath = path.join(dir, CAPTURE_MARKER);
+    let marker;
+    try {
+      marker = JSON.parse(await fsp.readFile(markerPath, 'utf8'));
+    } catch { continue; }
+
+    try {
+      const sr = Number(marker.sampleRate) || 16000;
+      const parts = {};
+      let samples = 0;
+      for (const [name, file] of Object.entries(CAPTURE_PARTS)) {
+        const full = path.join(dir, file);
+        const stat = await fsp.stat(full).catch(() => null);
+        if (!stat) { parts[name] = null; continue; }
+        const dataBytes = Math.max(0, stat.size - WAV_HEADER_BYTES);
+        // The header is the only thing an interrupted write leaves wrong.
+        const fh = await fsp.open(full, 'r+');
+        await fh.write(wavHeader(dataBytes, sr), 0, WAV_HEADER_BYTES, 0);
+        await fh.close();
+        parts[name] = full;
+        samples = Math.max(samples, Math.floor(dataBytes / 2));
+      }
+
+      if (!parts.mic || !parts.system || samples === 0) {
+        // Nothing was ever captured. Clear the leftovers rather than leaving a
+        // folder that will be offered as a recovery for ever.
+        for (const file of Object.values(CAPTURE_PARTS)) {
+          await fsp.rm(path.join(dir, file), { force: true }).catch(() => {});
+        }
+        await fsp.rm(markerPath, { force: true }).catch(() => {});
+        continue;
+      }
+
+      const startedAt = Date.parse(marker.startedAt) || Number(marker.startedAt) || Date.now();
+      // No endedAt was ever recorded, so the audio is the only witness to how
+      // long this ran. Wall time and captured time are the same number here,
+      // which is the honest thing to write when nothing measured the gap.
+      const durationSeconds = samples / sr;
+      const endedAt = startedAt + durationSeconds * 1000;
+      await finalizeCapture({
+        dir,
+        parts,
+        sampleRate: sr,
+        startedAt,
+        endedAt,
+        durationSeconds,
+        title: marker.title || '',
+        notes: null,
+        timeline: { deviceEvents: [], mic: {}, system: {}, recovered: true },
+        calendarEvent: marker.calendarEvent ?? null,
+      });
+      await fsp.rm(markerPath, { force: true }).catch(() => {});
+      recovered++;
+    } catch {
+      /*
+       * Leave the folder exactly as it is. Its marker and its part files stay,
+       * so the next launch tries again, and a repair that keeps failing never
+       * costs the user the samples it could not assemble.
+       */
+    }
+  }
+  return recovered;
+}
+
+/**
+ * Turn finished part files into a segment of a meeting, or into a new meeting.
+ *
+ * Shared by Stop and by recovery so both write exactly the same shape. The only
+ * difference between them is that recovery has no notes and no endedAt of its
+ * own, and says so rather than inventing them.
+ */
+async function finalizeCapture(opts) {
+  const {
+    dir, parts, sampleRate, startedAt, endedAt, durationSeconds,
+    title, notes, timeline, calendarEvent,
+  } = opts;
+
+  const tracks = {
+    mic: await trackMetaFromWav(parts.mic, sampleRate, durationSeconds),
+    system: await trackMetaFromWav(parts.system, sampleRate, durationSeconds),
+  };
+
+  const meta = await readMeta(dir);
+  if (meta) {
+    // Another segment of a meeting that already exists.
+    const existing = await fsp.readdir(dir).catch(() => []);
+    const segment = nextSegment(meta, {
+      startedAt, endedAt, durationSeconds, existing, tracks, timeline,
+    });
+    await fsp.rename(parts.mic, path.join(dir, segment.files.mic));
+    await fsp.rename(parts.system, path.join(dir, segment.files.system));
+    if (notes !== null) await fsp.writeFile(path.join(dir, 'my-notes.md'), (notes ?? '').trimEnd() + '\n');
+
+    const next = withSegment(meta, segment);
+    if (title) next.title = title;
+    await fsp.writeFile(path.join(dir, 'meeting.json'), JSON.stringify(next, null, 2) + '\n');
+    await reindexSoon();
+    return { dir, meta: next, segment };
+  }
+
+  await fsp.rename(parts.mic, path.join(dir, 'mic.wav'));
+  await fsp.rename(parts.system, path.join(dir, 'system.wav'));
+  if (notes !== null) await fsp.writeFile(path.join(dir, 'my-notes.md'), (notes ?? '').trimEnd() + '\n');
+
+  const fresh = {
+    schema: 1,
+    title: title || 'Untitled',
+    startedAt: new Date(startedAt).toISOString(),
+    endedAt: new Date(endedAt).toISOString(),
+    durationSeconds: +durationSeconds.toFixed(2),
+    sampleRate,
+    tracks,
+    timeline,
+    calendarEvent: calendarEvent && typeof calendarEvent === 'object' ? calendarEvent : null,
+    audioDisposition: 'kept: delete after transcription succeeds',
+    transcript: null,
+  };
+  await fsp.writeFile(path.join(dir, 'meeting.json'), JSON.stringify(fresh, null, 2) + '\n');
+  await reindexSoon();
+  return { dir, meta: fresh, segment: segmentsOf(fresh)[0] ?? null };
+}
+
 ipcMain.handle('save-meeting', async (_evt, payload) => {
   const { dir: into, startedAt, endedAt, title, notes, sampleRate, mic, system, timeline, calendarEvent } = payload;
+
+  /*
+   * The recorder's path. Its audio has been on disk since the capture began, so
+   * there is nothing to write here: close the two files, measure them, and give
+   * them their real names.
+   *
+   * The buffer path below is still reachable and still supported, for a caller
+   * that has a whole recording in hand rather than a capture in progress. It is
+   * how the harnesses make meetings, and it is the only way to save audio this
+   * process did not itself write.
+   */
+  if (payload.streamed) {
+    const target = confine(into);
+    const closed = await closeCapture(target);
+    if (!closed) throw new Error('No capture is open for that folder, so there is nothing to finish.');
+    const durationSeconds = (endedAt - startedAt) / 1000;
+    const saved = await finalizeCapture({
+      dir: target,
+      parts: { mic: closed.tracks.mic.file, system: closed.tracks.system.file },
+      // The capture's own rate, not the payload's: the file was written at one
+      // rate and its header already says so.
+      sampleRate: closed.sampleRate,
+      startedAt, endedAt, durationSeconds,
+      title, notes: notes ?? '', timeline, calendarEvent,
+    });
+    // Last, so a throw above leaves the marker and the parts for recovery.
+    await fsp.rm(path.join(target, CAPTURE_MARKER), { force: true }).catch(() => {});
+    return saved;
+  }
 
   const micF32 = new Float32Array(mic.buffer, mic.byteOffset, mic.byteLength / 4);
   const sysF32 = new Float32Array(system.buffer, system.byteOffset, system.byteLength / 4);
@@ -551,16 +947,6 @@ ipcMain.handle('save-notes', async (_evt, dir, text) => {
   const target = confine(dir);
   await fsp.writeFile(path.join(target, 'my-notes.md'), (text ?? '').trimEnd() + '\n');
   return { chars: (text ?? '').length };
-});
-
-/**
- * Deletion goes to the recycle bin, never a hard unlink. A meeting is a record of
- * a real conversation and the user may want it back.
- */
-ipcMain.handle('delete-meeting', async (_evt, dir) => {
-  await shell.trashItem(confine(dir));
-  await reindexSoon();
-  return true;
 });
 
 /**
@@ -880,6 +1266,7 @@ ipcMain.on('recording-state', (evt, payload) => {
   if (!win || win.isDestroyed() || evt.sender !== win.webContents) return;
 
   recordingState = cleanRecordingState(payload);
+  applySleepBlock(recordingState.recording);
   if (recordingState.recording) {
     createIndicator();
     sendIndicatorState();
@@ -952,7 +1339,6 @@ const calendar = createCalendarStore({
 
 ipcMain.handle('calendar-refresh', () => calendar.refresh());
 ipcMain.handle('calendar-upcoming', (_evt, opts) => calendar.upcoming(opts?.days ?? 7));
-ipcMain.handle('calendar-event-now', () => calendar.eventNow());
 
 /* ----------------------------------------------------------- meeting alert */
 
@@ -1079,7 +1465,18 @@ function checkAlerts() {
   const on = settings.get('meetingAlerts') !== false;
   const events = on ? alertCandidates() : [];
 
-  if (on && !notifyEvent) {
+  /*
+   * Never interrupt a recording in progress. The user is in a meeting; a card
+   * about the next one is noise, and "Take notes" would be refused by the
+   * renderer anyway because it will not start a second note over a live one.
+   *
+   * The occurrence is deliberately NOT marked as alerted here, so it can still
+   * be offered when the recording stops, as long as it is inside the grace
+   * window. Marking it would spend the prompt on a moment the user never saw.
+   */
+  const busy = recordingState.recording === true;
+
+  if (on && !busy && !notifyEvent) {
     const due = pendingAlert(events, Date.now(), { alerted: alertedKeys });
     if (due?.event) {
       notifyEvent = due.event;
@@ -1091,7 +1488,9 @@ function checkAlerts() {
     }
   }
 
-  const wait = on ? nextWakeMs(events, Date.now()) : 60_000;
+  // A short wait while busy: the recording may stop at any moment, and the
+  // prompt it deferred is only useful if it comes soon after.
+  const wait = busy ? 15_000 : (on ? nextWakeMs(events, Date.now()) : 60_000);
   notifyTimer = setTimeout(checkAlerts, wait);
   notifyTimer.unref?.();
 }
@@ -1325,6 +1724,9 @@ app.on('before-quit', async () => {
   // depend on whether the worker modules happened to load.
   destroyIndicator();
   closeNotify();
+  // Patch the headers of anything still being written, so a quit mid-recording
+  // leaves a playable file rather than one recovery has to repair.
+  for (const dir of [...captures.keys()]) closeCapture(dir);
   if (notifyTimer) { clearTimeout(notifyTimer); notifyTimer = null; }
   try {
     const { killWorkers } = await import('./transcribe.js');
@@ -1351,6 +1753,13 @@ if (!app.requestSingleInstanceLock()) {
     screen.on('display-metrics-changed', reclampIndicator);
     // After the window, so the first 'calendar-updated' has somewhere to land.
     calendar.start().catch(() => { /* reported through calendar-updated */ });
+    /*
+     * Finish any recording that was interrupted, before anything else touches
+     * the meetings folder. Nothing is announced: a rescued meeting simply
+     * appears in the list with its title and its length, which is what the user
+     * would have had if the machine had not gone down.
+     */
+    recoverCaptures().catch(() => { /* every folder it cannot repair, it leaves */ });
     checkAlerts();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -17,6 +17,7 @@
  * post-stop transcribe path still exists.
  */
 import { renderMarkdown } from './md.js';
+import { PROVIDERS } from './settings-view.js';
 import { segmentsOf as segmentsOfMeta } from './meeting-schema.js';
 import {
   renderBubbles, appendBubble, segmentsFromTranscript, enableBubbleCopy, filterBubbles,
@@ -89,6 +90,9 @@ const T = {
 
 let ctx = null, streams = {}, nodes = [], recording = false;
 let startedAt = 0, tick = null, deviceEvents = [], capTimer = null;
+// Track ids already reported as muted or ended, so the 250 ms poll records
+// the transition rather than the condition. Cleared with deviceEvents.
+let mutedTracks = new Set();
 
 /*
  * Stop ends the capture, not the note, and Resume starts another capture into
@@ -119,9 +123,86 @@ let current = null;
 let currentSegments = [];
 
 /** Release every device and node. Safe to call twice. */
+/*
+ * Audio goes to disk while the meeting runs, a few seconds at a time.
+ *
+ * Before this, every sample stayed in T.mic.chunks and T.sys.chunks until Stop,
+ * and only then crossed to main to be written. Two things were wrong with that.
+ * A crash, a power cut or a forced Windows restart lost the whole meeting,
+ * because nothing had been written yet. And the memory grew for the length of
+ * the recording: Float32 at 16 kHz on two tracks is 128 KB a second, so the
+ * three hours MAX_MINUTES allows is about 1.3 GiB, briefly doubled while the
+ * save copied it.
+ *
+ * Now each flush hands its blocks over and lets go of them, so what this window
+ * holds is a few seconds, not a meeting. FLUSH_MS is the size of the hole a
+ * power cut can still make: four seconds is small enough not to matter and long
+ * enough that the write happens a few times a minute rather than constantly.
+ */
+const FLUSH_MS = 4000;
+
+let captureDir = '';        // the meeting folder main is writing into
+let flushTimer = null;
+let flushChain = Promise.resolve();
+let flushWarned = false;
+
+/** Float32 blocks to the 16-bit PCM the wav holds, clamped the same way. */
+function toPcm16(chunks) {
+  let total = 0;
+  for (const c of chunks) total += c.length;
+  const out = new Int16Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    for (let i = 0; i < c.length; i++) {
+      const s = Math.max(-1, Math.min(1, c[i]));
+      out[at++] = Math.round(s * 32767);
+    }
+  }
+  return out;
+}
+
+/**
+ * Hand over everything captured since the last flush.
+ *
+ * Chained rather than parallel, and the chunks are taken before the first await:
+ * two flushes in flight at once would interleave their samples in the file, and
+ * a block arriving mid-flush must belong to the next one, not this one.
+ */
+function flushCapture() {
+  if (!captureDir) return flushChain;
+
+  const work = [];
+  for (const [key, track] of [['mic', 'mic'], ['sys', 'system']]) {
+    const chunks = T[key].chunks;
+    if (!chunks.length) continue;
+    T[key].chunks = [];
+    work.push([track, toPcm16(chunks)]);
+  }
+  if (!work.length) return flushChain;
+
+  flushChain = flushChain.then(async () => {
+    for (const [track, pcm] of work) {
+      const r = await api.captureAppend(
+        captureDir, track, new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength),
+      );
+      // Said once. A disk that has stopped accepting writes will fail every
+      // flush, and a warning every four seconds tells the user nothing new.
+      if (r && r.ok === false && !flushWarned) {
+        flushWarned = true;
+        setStatus(
+          'Could not write audio to disk: ' + (r.error ?? 'unknown') +
+          ' The recording is still running, but expect a gap.', 'warn');
+      }
+    }
+  }).catch(() => { /* reported above; never break the recording */ });
+
+  return flushChain;
+}
+
 function teardownCapture() {
   clearInterval(tick); clearTimeout(capTimer);
   clearInterval(levelTimer); clearInterval(stateTimer);
+  clearInterval(flushTimer); flushTimer = null;
   levelTimer = null; stateTimer = null;
   for (const n of nodes) { try { n.disconnect(); } catch {} }
   nodes = [];
@@ -135,6 +216,7 @@ function resetTracks() {
     Object.assign(T[k], { chunks: [], frames: 0, empty: 0, blocks: 0, peak: 0, level: 0 });
   }
   deviceEvents = [];
+  mutedTracks = new Set();
 }
 
 /* ---------------------------------------------------------------- levels */
@@ -486,6 +568,28 @@ async function start() {
     capturedBefore = 0;
     segmentIndex = 1;
   }
+  /*
+   * Open the meeting folder before the recording is live, and fail the whole
+   * start if it cannot be opened. A recording that cannot reach disk cannot be
+   * saved either; learning that now costs nothing, and learning it at Stop
+   * costs the meeting.
+   */
+  try {
+    const begun = await api.captureBegin({
+      dir: current?.dir,
+      startedAt,
+      title: $('noteTitle')?.value.trim() ?? '',
+      sampleRate: ctx.sampleRate,
+      calendarEvent,
+    });
+    captureDir = begun.dir;
+    flushWarned = false;
+  } catch (e) {
+    try { await ctx?.close(); } catch {}
+    ctx = null;
+    return fail('The meeting folder could not be opened for writing: ' + e.message + ' Nothing was recorded.');
+  }
+
   recording = true;
   starting = false;
   // The first block is milliseconds away; dating the level now buys the pill
@@ -517,6 +621,7 @@ async function start() {
 
   levelTimer = setInterval(() => paintLevels(), Math.round(1000 / LEVEL_FPS));
   stateTimer = setInterval(pushRecordingState, Math.round(1000 / STATE_FPS));
+  flushTimer = setInterval(flushCapture, FLUSH_MS);
 
   tick = setInterval(() => {
     const s = Math.floor(capturedSeconds());
@@ -525,11 +630,23 @@ async function start() {
       `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
     // A driver that fails in place fires no event and keeps feeding zeros, so the
     // latched peak still reads healthy. `muted` is what actually catches it.
+    /*
+     * Latched. This runs four times a second, and without the latch a muted
+     * microphone wrote four events a second into meeting.json for the rest of
+     * the meeting: an hour of a muted mic was 14,400 identical entries, and the
+     * status line said the same sentence over and over. What matters is the
+     * transition, so only the transition is recorded.
+     */
     for (const st of Object.values(streams)) {
       for (const tr of st?.getAudioTracks() ?? []) {
-        if (tr.muted || tr.readyState === 'ended') {
+        const bad = tr.muted || tr.readyState === 'ended';
+        if (bad && !mutedTracks.has(tr.id)) {
+          mutedTracks.add(tr.id);
           deviceEvents.push({ at: Date.now() - startedAt, event: 'track-muted', label: tr.label });
           setStatus(`"${tr.label || 'a device'}" went silent mid-recording.`, 'warn');
+        } else if (!bad && mutedTracks.delete(tr.id)) {
+          // Worth writing down: it says where the gap ends.
+          deviceEvents.push({ at: Date.now() - startedAt, event: 'track-recovered', label: tr.label });
         }
       }
     }
@@ -597,14 +714,6 @@ function fail(msg) {
 
 // Derive the length from the data itself. Trusting a separately-maintained
 // counter is what turns any counter drift into an out-of-bounds write.
-const concat = (chunks) => {
-  const total = chunks.reduce((n, c) => n + c.length, 0);
-  const out = new Float32Array(total);
-  let at = 0;
-  for (const c of chunks) { out.set(c, at); at += c.length; }
-  return out;
-};
-
 async function stopRec() {
   if (!recording) return;
   recording = false;
@@ -628,25 +737,24 @@ async function stopRec() {
   try { await ctx.close(); } catch {}
   applyOnTop(false);
 
-  // Held outside the try so a failed save can hand the PCM back. The chunk
-  // arrays are still released before the save, so the success path never holds
-  // two copies of a three-hour recording at once.
-  let mic = null, sys = null;
   let saved = null;
   try {
-    mic = concat(T.mic.chunks);
-    sys = concat(T.sys.chunks);
-    T.mic.chunks = []; T.sys.chunks = [];
+    // The tail. Everything else went down while the meeting was running.
+    await flushCapture();
+    await flushChain;
+
     const { dir, meta, segment } = await api.saveMeeting({
-      // With a folder, this capture is appended to that meeting as another
-      // segment. Without one, it starts a new meeting.
-      dir: current?.dir,
+      /*
+       * The audio is already in the folder, written as it arrived. This asks
+       * main to close the two files, measure them and give them their real
+       * names, so nothing crosses the bridge here except the meeting's text.
+       */
+      streamed: true,
+      dir: captureDir,
       startedAt, endedAt,
       title: $('noteTitle')?.value.trim() ?? '',
       notes: $('notes')?.value ?? '',
       sampleRate: sr,
-      mic: new Uint8Array(mic.buffer),
-      system: new Uint8Array(sys.buffer),
       timeline: {
         deviceEvents,
         mic: { renderBlocks: T.mic.blocks, emptyBlocks: T.mic.empty },
@@ -676,14 +784,16 @@ async function stopRec() {
       `Saved ${meta.durationSeconds.toFixed(0)}s. You ${meta.tracks.mic.voicedSeconds}s, ` +
       `them ${meta.tracks.system.voicedSeconds}s.`, 'good');
   } catch (e) {
-    // The file on disk was the only copy this path was about to make, so put
-    // the audio back rather than discarding hours of meeting on a full disk.
-    if (mic) T.mic.chunks = [mic];
-    if (sys) T.sys.chunks = [sys];
+    /*
+     * The audio is not at risk here, which is the whole point of writing it as
+     * it arrived. What failed is the bookkeeping around it, and the folder
+     * still holds both wavs and the marker that says the recording is
+     * unfinished, so the next launch assembles it.
+     */
     setStatus(
       'Save failed: ' + e.message +
-      ' The recording is still in memory. Keep this window open: it is lost if you ' +
-      'close the app or start another recording.', 'warn');
+      ' The audio itself is safe in the meeting folder, and MIN will finish ' +
+      'saving it the next time it starts.', 'warn');
   } finally {
     // Must run even when concat or saveMeeting throws, or Record stays dead.
     rec.disabled = false;
@@ -902,18 +1012,6 @@ function transcriptText() {
  * That is the whole integration: no keys, no OAuth, nothing to revoke, and it
  * works identically for every provider.
  */
-const PROVIDERS = [
-  { id: 'claude',     name: 'Claude' },
-  { id: 'chatgpt',    name: 'ChatGPT' },
-  { id: 'gemini',     name: 'Gemini' },
-  { id: 'copilot',    name: 'Copilot' },
-  { id: 'perplexity', name: 'Perplexity' },
-  { id: 'grok',       name: 'Grok' },
-  { id: 'mistral',    name: 'Le Chat' },
-  { id: 'deepseek',   name: 'DeepSeek' },
-  { id: '',           name: 'Clipboard only' },
-];
-
 async function initProviders() {
   const sel = $('provider');
   if (!sel) return;
@@ -1202,7 +1300,28 @@ export function newNote(prefill) {
     setStatus('Stop the recording before starting another note.', 'warn');
     return false;
   }
+
+  /*
+   * A note that has never been recorded has no folder, so its text lives only
+   * in this textarea: scheduleNotesSave bails without a dir, and nothing else
+   * writes it. Replacing it used to blank it with no warning.
+   *
+   * That was survivable while the only way here was the user's own click. It
+   * stopped being survivable with the meeting prompt, which arrives on the
+   * calendar's schedule: type an agenda for ten minutes, have a prompt appear
+   * for an unrelated meeting, press "Take notes", and every word is gone at a
+   * moment nobody chose. So ask. The answer is only ever needed for text that
+   * has nowhere else to be.
+   */
+  const pending = current?.dir ? '' : ($('notes')?.value ?? '').trim();
+  if (pending && !confirm(
+    'This note has not been recorded, so its text is not saved anywhere yet. ' +
+    'Starting another note will discard it.\n\nDiscard and continue?')) {
+    return false;
+  }
+
   clearTimeout(notesTimer);
+  captureDir = '';
   current = null;
   currentSegments = [];
   lastSavedNotes = null;

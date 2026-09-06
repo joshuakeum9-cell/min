@@ -11,7 +11,7 @@
  * parsed RRULEs and cross-references (an override points at its master) that do
  * not survive JSON, and fetchCalendar does not hand back the text they came
  * from. A flat occurrence with no rule survives JSON with two Dates to restore,
- * and calendar.js's upcoming() and eventAt() treat a rule-less event as itself,
+ * and calendar.js's upcoming() treats a rule-less event as itself,
  * so the cached window renders through exactly the same code as live data.
  *
  * The cache is keyed by a hash of the calendar URL, so a cache written for one
@@ -27,7 +27,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { fetchCalendar, expandAll, upcoming, eventAt } from './calendar.js';
+import { fetchCalendar, expandAll, upcoming } from './calendar.js';
 
 const DAY_MS = 86400000;
 const MINUTE_MS = 60000;
@@ -286,16 +286,6 @@ export function createCalendarStore({ settings, cachePath, onUpdated, fetch = fe
     }));
   }
 
-  function eventNow(when = new Date(now())) {
-    const ev = eventAt(events, when);
-    if (!ev) return null;
-    const startMs = new Date(ev.start).getTime();
-    // eventAt has already chosen the occurrence; find the same one for its names.
-    const occ = expandAll(events, new Date(startMs - 1), new Date(startMs + 1))
-      .find((o) => o.uid === ev.uid && o.start.getTime() === startMs);
-    return serialiseEvent(ev, attendeeNames(occ));
-  }
-
   /* ........................................................... interval */
 
   function intervalMs() {
@@ -323,7 +313,6 @@ export function createCalendarStore({ settings, cachePath, onUpdated, fetch = fe
   return {
     refresh,
     upcoming: upcomingDays,
-    eventNow,
     start,
     stop,
     /** For the settings pane: when the feed was last read, and the last error if any. */
