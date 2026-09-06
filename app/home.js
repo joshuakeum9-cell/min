@@ -190,8 +190,16 @@ function normaliseAgenda(groups, now) {
     const normalised = events.map((ev) => {
       const start = asDate(ev?.start);
       const end = asDate(ev?.end);
+      // These fields and no more. Clicking a row hands this object to the note
+      // as prefill.calendarEvent, and recording that note saves it into
+      // meeting.json, so the event as it arrived over IPC used to land on disk
+      // nested inside its own copy. Nothing ever read it back.
       return {
         id: String(ev?.id ?? ''),
+        // Carried explicitly because it used to reach disk only inside `raw`:
+        // without it library.js resolves calendarUid to null for a note started
+        // from a Coming up row, while one started from the prompt has it.
+        uid: String(ev?.uid ?? ''),
         title: String(ev?.title || 'Untitled event'),
         start,
         end,
@@ -200,7 +208,6 @@ function normaliseAgenda(groups, now) {
         attendeeCount: Number(ev?.attendeeCount) || 0,
         recurring: Boolean(ev?.recurring),
         inProgress: Boolean(start && end && start <= now && end > now),
-        raw: ev,
       };
     });
     // The day key is the authority; the first event's start is the fallback for a
@@ -249,39 +256,81 @@ function countEvents(groups) {
 }
 
 /**
+ * Empty the pager, and report which of its controls the keyboard was on so the
+ * rebuild can hand focus back.
+ *
+ * Called from the top of renderAgenda rather than from renderAgendaNav, because
+ * the pager is a sibling of the agenda card and not a child of it: the three
+ * states that return before drawing a pager would otherwise leave the last one
+ * on screen, enabled, steering an agenda that is no longer there.
+ */
+function clearAgendaNav() {
+  const nav = $('agendaNav');
+  if (!nav) return null;
+  const focused = nav.contains(document.activeElement)
+    ? document.activeElement.dataset.nav ?? null
+    : null;
+  clear(nav);
+  return focused;
+}
+
+/**
  * Back, forward and Today, beside the heading.
  *
  * Rebuilt on every render rather than kept and mutated, because the page count
  * changes whenever the calendar does and there is nothing here worth the
- * bookkeeping of a partial update.
+ * bookkeeping of a partial update. `focused` is what clearAgendaNav found on
+ * the pager it emptied, which is how the rebuild keeps the keyboard's place.
  */
-function renderAgendaNav(pages, total) {
+function renderAgendaNav(pages, total, focused) {
   const nav = $('agendaNav');
   if (!nav) return;
-  clear(nav);
   if (total <= AGENDA_PAGE) return;   // one page: nothing to steer
 
   const go = (to) => { agendaPage = to; renderAgenda(); };
+  const buttons = new Map();
 
   if (agendaPage > 0) {
     const today = el('button', 'agenda-nav-today', 'Today');
     today.type = 'button';
     today.title = 'Back to today';
+    today.dataset.nav = 'today';
     today.addEventListener('click', () => go(0));
     nav.append(today);
+    buttons.set('today', today);
   }
 
-  const arrow = (label, glyph, to, enabled) => {
+  const arrow = (key, label, glyph, to, enabled) => {
     const b = el('button', 'agenda-nav-btn', glyph);
     b.type = 'button';
     b.title = label;
+    b.dataset.nav = key;
     b.setAttribute('aria-label', label);
     b.disabled = !enabled;
     if (enabled) b.addEventListener('click', () => go(to));
     nav.append(b);
+    buttons.set(key, b);
   };
-  arrow('Earlier meetings', '\u2039', agendaPage - 1, agendaPage > 0);
-  arrow('Later meetings', '\u203a', agendaPage + 1, agendaPage < pages - 1);
+  arrow('prev', 'Earlier meetings', '\u2039', agendaPage - 1, agendaPage > 0);
+  arrow('next', 'Later meetings', '\u203a', agendaPage + 1, agendaPage < pages - 1);
+
+  /*
+   * Give focus back to the button that was just pressed. At either end of the
+   * range that button is gone (Today, once page one is showing) or disabled
+   * (the arrow that ran out of pages), so focus goes to its neighbour, which is
+   * the one still worth pressing. Paging must not cost a tab back through the
+   * whole page each time.
+   */
+  if (!focused) return;
+  const nextBest = {
+    today: ['today', 'next', 'prev'],
+    prev: ['prev', 'next', 'today'],
+    next: ['next', 'prev', 'today'],
+  };
+  for (const key of nextBest[focused] ?? []) {
+    const b = buttons.get(key);
+    if (b && !b.disabled) { b.focus(); return; }
+  }
 }
 
 function renderEventRow(ev) {
@@ -327,6 +376,7 @@ function renderAgenda() {
   const root = $('comingUp');
   if (!root) return;
   clear(root);
+  const navFocus = clearAgendaNav();
 
   if (!calendarConfigured) {
     const row = el('button', 'agenda-empty link');
@@ -376,7 +426,7 @@ function renderAgenda() {
     groups.sort((a, b) => a.date - b.date);
   }
 
-  renderAgendaNav(pages, total);
+  renderAgendaNav(pages, total, navFocus);
 
   for (const g of groups) {
     const day = el('div', 'agenda-day');
@@ -492,7 +542,7 @@ function openRowMenu(row, button, m) {
     return b;
   };
 
-  item('Move to trash', 'danger', () => trashMeeting(m));
+  item('Move to trash', 'danger', () => trashMeeting(m, row));
 
   const onDoc = (e) => { if (!menu.contains(e.target) && e.target !== button) closeRowMenu(); };
   const onKey = (e) => {
@@ -514,13 +564,37 @@ function openRowMenu(row, button, m) {
  * confirmation, the row says where it went, and a modal for something this
  * reversible is the kind of friction that trains people to click through
  * dialogs that matter.
+ *
+ * `row` is the element the menu was opened from, kept only to know where in the
+ * list the gap will be.
  */
-async function trashMeeting(m) {
+async function trashMeeting(m, row) {
   if (!m?.dir || typeof api?.trashMeeting !== 'function') return;
   try {
+    /*
+     * Read the row's place AFTER the await, not before. closeRowMenu has already
+     * dropped focus to the body by this point, and the list can repaint while
+     * the trash is in flight, which makes an index taken beforehand point at a
+     * different meeting.
+     */
+    const index = [...document.querySelectorAll('#noteList .note-row')].indexOf(row);
     await api.trashMeeting(m.dir);
     meetings = meetings.filter((x) => x.dir !== m.dir);
     renderNoteList();
+    /*
+     * Focus follows the deletion: the row that takes the gap, the last row when
+     * the trashed one was last, the filter box when nothing is left. Without it
+     * focus falls to the body and deleting a second note costs a tab through the
+     * whole page.
+     *
+     * Only from the body, though. The trash is a round trip to the shell, and a
+     * user who clicked into the search box while it ran must not have the caret
+     * yanked out from under them when it returns.
+     */
+    if (index >= 0 && document.activeElement === document.body) {
+      const rows = document.querySelectorAll('#noteList .note-row');
+      (rows[Math.min(index, rows.length - 1)] ?? $('ask'))?.focus();
+    }
     homeStatus(`"${m.title || 'Untitled meeting'}" moved to the recycle bin.`, 'good');
   } catch (err) {
     homeStatus('Could not move it to the trash: ' + (err?.message ?? err), 'warn');
@@ -562,6 +636,11 @@ function matchesFilter(m, q) {
 function renderNoteList() {
   const root = $('noteList');
   if (!root) return;
+  // Nothing but closeRowMenu takes the menu's document listeners off again, and
+  // this repaints under an open menu on every keystroke in the filter box and on
+  // every refresh. Detaching the menu alone would leave its capture-phase
+  // keydown to swallow the next Escape on behalf of a menu that is gone.
+  closeRowMenu();
   clear(root);
 
   const q = ($('ask')?.value ?? '').trim().toLowerCase();
