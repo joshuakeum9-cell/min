@@ -223,6 +223,16 @@ async function boot() {
   });
   api?.onOpenSettings?.(() => navigate('settings'));
 
+  /*
+   * A meeting arrived in the folder that this app did not write: synced over
+   * from another PC, or written by the Granola importer. Redraw Home if that is
+   * what is on screen. Anywhere else it costs nothing to skip, because
+   * navigating to Home re-reads the folder anyway.
+   */
+  api?.onMeetingsChanged?.(() => {
+    if (currentView === 'home') refreshHome().catch(() => {});
+  });
+
   navigate('home');
 }
 

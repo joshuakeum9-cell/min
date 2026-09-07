@@ -123,4 +123,10 @@ contextBridge.exposeInMainWorld('api', {
   onOpenSettings: (cb) => subscribe('open-settings', cb),
   /** 'focus' | 'stop', raised by the floating indicator. */
   onIndicatorCommand: (cb) => subscribe('indicator-command', cb),
+  /**
+   * The meetings folder changed underneath the app: a sync client brought a
+   * meeting over from another PC, or the Granola importer wrote one. No
+   * payload; the list re-reads the folder for itself.
+   */
+  onMeetingsChanged: (cb) => subscribe('meetings-changed', cb),
 });

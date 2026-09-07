@@ -954,9 +954,63 @@ async function reindexSoon() {
   return indexJob;
 }
 
+/* --------------------------------------------- meetings arriving from away */
+
+/**
+ * Watch the meetings folder for changes this app did not make.
+ *
+ * The case this exists for: the folder is synced (Google Drive for Desktop,
+ * OneDrive, Dropbox), a meeting is recorded on another PC, and the sync client
+ * drops it in here. Nothing in MIN would otherwise notice. The list only
+ * re-reads when you navigate to Home, and the search index was built once per
+ * session, so a meeting that arrived from the laptop was invisible to search
+ * until the app was restarted.
+ *
+ * Debounced hard, because the events are not one per meeting: a sync client
+ * writing a folder fires a dozen, and a recording in progress fires one per
+ * flush. A debounce that keeps resetting also means this stays quiet for the
+ * whole of a long recording, which is what we want; it settles afterwards.
+ */
+let meetingsWatcher = null;
+let watchTimer = null;
+let indexStale = false;
+
+function stopWatchingMeetings() {
+  if (watchTimer) { clearTimeout(watchTimer); watchTimer = null; }
+  try { meetingsWatcher?.close(); } catch { /* already gone */ }
+  meetingsWatcher = null;
+}
+
+async function watchMeetings() {
+  stopWatchingMeetings();
+  const root = meetingsDir();
+  // Created rather than merely watched: a folder that does not exist yet cannot
+  // be watched, and MIN would create it on the first save anyway. This also
+  // makes a freshly pointed Drive folder start working straight away.
+  await fsp.mkdir(root, { recursive: true }).catch(() => {});
+  try {
+    meetingsWatcher = fsSync.watch(root, { recursive: true }, () => {
+      if (watchTimer) clearTimeout(watchTimer);
+      watchTimer = setTimeout(() => {
+        watchTimer = null;
+        indexStale = true;
+        if (win && !win.isDestroyed()) win.webContents.send('meetings-changed');
+      }, 1500);
+    });
+    // A watched folder can go away: a drive unmounts, a sync client rebuilds it.
+    // Losing the watcher must not take the app with it.
+    meetingsWatcher.on('error', () => stopWatchingMeetings());
+  } catch { /* not watchable; the list still re-reads whenever Home is opened */ }
+}
+
 ipcMain.handle('search', async (_evt, q) => {
   const { search } = await import('./library.js');
-  if (!indexReady) { await reindexSoon(); indexReady = true; }
+  // Cleared before the rebuild, not after: a change arriving while the rebuild
+  // runs must leave the flag set so the NEXT search rebuilds again, rather than
+  // being wiped by the rebuild that started before it.
+  const changed = indexStale;
+  indexStale = false;
+  if (!indexReady || changed) { await reindexSoon(); indexReady = true; }
   return search(INDEX_PATH, q);
 });
 
@@ -1186,6 +1240,7 @@ ipcMain.handle('settings-set', (_evt, patch) => {
        */
       if ('meetingsDir' in patch) {
         setMeetingsDir(result.meetingsDir);
+        watchMeetings();
         reindexSoon();
       }
     }
@@ -2184,6 +2239,7 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
 app.on('before-quit', async () => {
   quitting = true;
   stopMicWatch();
+  stopWatchingMeetings();
   // First and outside the try: a transparent always-on-top window that outlives
   // its app is the classic stray-rectangle-on-the-desktop bug, and it must not
   // depend on whether the worker modules happened to load.
@@ -2230,6 +2286,9 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     applyLoginItem();
     syncMicWatch();
+    // After recoverCaptures, so the repairs it makes are not mistaken for
+    // meetings arriving from another machine.
+    watchMeetings();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
       else showMain();
