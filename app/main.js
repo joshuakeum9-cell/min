@@ -1500,6 +1500,13 @@ function createTray() {
  */
 function applyLoginItem() {
   if (!app.isPackaged) return;
+  /*
+   * A harness launches the packaged exe with --user-data-dir pointing at a
+   * throwaway profile. That is not the person's MIN, so it must not register
+   * itself to start at sign-in: without this guard the packaged smoke test
+   * wrote dist/win-unpacked into HKCU Run on this machine.
+   */
+  if (process.argv.some((a) => a.startsWith('--user-data-dir'))) return;
   try {
     app.setLoginItemSettings({
       openAtLogin: settings.get('startAtLogin') !== false,
