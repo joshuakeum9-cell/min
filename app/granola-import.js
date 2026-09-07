@@ -106,6 +106,64 @@ export function parseGranolaTranscript(raw) {
 }
 
 /**
+ * How many words a single transcript line may carry before it is broken up.
+ *
+ * About 55 words is twenty-odd seconds of speech, which is the size of line a
+ * MIN recording produces naturally: its voice-activity detector cuts at pauses,
+ * so nothing it writes is ever a wall of text.
+ */
+export const MAX_WORDS_PER_LINE = 55;
+
+/**
+ * Break very long turns into paragraph-sized lines at sentence boundaries.
+ *
+ * Why this is needed: a Granola export of a webinar can carry ten thousand
+ * characters under a single "Them:" label, because one person talked for ten
+ * minutes and nothing interrupted them. Written straight out, that is one line
+ * of transcript.md ten thousand characters wide. It wraps badly in every text
+ * viewer, it makes a useless search snippet, and an assistant retrieving the
+ * file gets one undifferentiated block instead of passages.
+ *
+ * Nothing is reworded, reordered or dropped: the split happens BETWEEN
+ * sentences, so every word survives in the order it was said, and the speaker
+ * is carried onto each piece. A single sentence longer than the limit is left
+ * whole rather than cut in half, because a sentence chopped mid-clause reads
+ * like a transcription error and this file is meant to be quotable.
+ *
+ * In the app these pieces merge back into one bubble, which is right: the
+ * person really did speak without stopping. The gain is in the file.
+ */
+export function splitLongTurns(turns, opts = {}) {
+  const max = Number(opts.maxWords) > 0 ? Number(opts.maxWords) : MAX_WORDS_PER_LINE;
+  const out = [];
+  for (const turn of turns) {
+    if (words(turn.text) <= max) { out.push(turn); continue; }
+    // Keep the terminator with its sentence: split after . ! or ? plus a space.
+    const sentences = String(turn.text).split(/(?<=[.!?])\s+/).filter(Boolean);
+    let buffer = [];
+    let count = 0;
+    const flush = () => {
+      if (!buffer.length) return;
+      out.push({ ...turn, text: buffer.join(' ') });
+      buffer = [];
+      count = 0;
+    };
+    for (const sentence of sentences) {
+      const n = words(sentence);
+      // Adding this sentence would overflow a line that already has something
+      // in it, so close that line first. A lone oversized sentence still goes
+      // out whole, on its own line.
+      if (count && count + n > max) flush();
+      buffer.push(sentence);
+      count += n;
+      if (count >= max) flush();
+    }
+    flush();
+  }
+  return out;
+}
+
+/**
  * Give each turn a start time by counting the words before it.
  *
  * Estimated, and only defensible because it is disclosed everywhere it lands.
@@ -221,7 +279,7 @@ export function meetingRecord(input, opts = {}) {
  * 'my-notes.md': string }, turns, seconds }`.
  */
 export function toMeetingFolder(input, opts = {}) {
-  const parsed = parseGranolaTranscript(input.transcript);
+  const parsed = splitLongTurns(parseGranolaTranscript(input.transcript), opts);
   const { turns, seconds } = estimateTimeline(parsed, opts);
   const meta = meetingRecord(input, { ...opts, seconds, count: turns.length });
   return {

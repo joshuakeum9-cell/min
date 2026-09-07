@@ -15,6 +15,7 @@
 import {
   parseGranolaTranscript, estimateTimeline, toTranscriptMd, folderNameFor,
   meetingRecord, toMeetingFolder, hhmmss, SECONDS_PER_WORD,
+  splitLongTurns, MAX_WORDS_PER_LINE,
 } from './granola-import.js';
 import { segmentsFromTranscript } from './conversation.js';
 
@@ -84,6 +85,39 @@ section('estimated timeline');
 {
   const { seconds } = estimateTimeline(parseGranolaTranscript(REAL), { secondsPerWord: 1 });
   eq('the pace is overridable', seconds, 17);
+}
+
+section('breaking up a wall of text');
+{
+  // A real case from this account: a webinar transcript where one speaker held
+  // the floor for ten thousand characters under a single label.
+  const long = { speaker: 'Them', name: null, text: Array.from({ length: 40 }, (_, i) => `Sentence number ${i} here.`).join(' ') };
+  const out = splitLongTurns([long]);
+  ok('a long turn becomes several lines', out.length > 1, `${out.length} lines`);
+  ok('every line is within the limit or a single sentence',
+    out.every((t) => t.text.split(/\s+/).filter(Boolean).length <= MAX_WORDS_PER_LINE));
+  eq('the speaker is carried onto every piece', [...new Set(out.map((t) => t.speaker))], ['Them']);
+  // The whole point: nothing may be reworded, reordered or lost.
+  eq('and not one word is changed, dropped or reordered',
+    out.map((t) => t.text).join(' '), long.text);
+}
+{
+  const short = { speaker: 'You', name: null, text: 'Short enough to leave alone.' };
+  eq('a short turn is untouched', splitLongTurns([short]), [short]);
+  eq('nothing in, nothing out', splitLongTurns([]), []);
+}
+{
+  // A sentence longer than the limit is left whole: half a sentence reads like
+  // a transcription error, and this file is meant to be quotable.
+  const huge = { speaker: 'Them', name: null, text: 'word '.repeat(120).trim() + '.' };
+  const out = splitLongTurns([huge]);
+  eq('an oversized single sentence is never cut in half', out.length, 1);
+  eq('and survives intact', out[0].text, huge.text);
+}
+{
+  const named = { speaker: 'Them', name: 'Casey Nolan', text: Array.from({ length: 30 }, (_, i) => `Point ${i} made clearly.`).join(' ') };
+  const out = splitLongTurns([named]);
+  ok('a named speaker keeps the name on each piece', out.every((t) => t.name === 'Casey Nolan'));
 }
 
 section('hhmmss');
