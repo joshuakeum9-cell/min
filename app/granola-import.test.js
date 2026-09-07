@@ -107,12 +107,25 @@ section('breaking up a wall of text');
   eq('nothing in, nothing out', splitLongTurns([]), []);
 }
 {
-  // A sentence longer than the limit is left whole: half a sentence reads like
-  // a transcription error, and this file is meant to be quotable.
+  // A run-on with no punctuation at all cannot be split without cutting a
+  // clause, so it is left whole rather than chopped mid-thought.
   const huge = { speaker: 'Them', name: null, text: 'word '.repeat(120).trim() + '.' };
   const out = splitLongTurns([huge]);
-  eq('an oversized single sentence is never cut in half', out.length, 1);
+  eq('an unpunctuated run-on is never cut in half', out.length, 1);
   eq('and survives intact', out[0].text, huge.text);
+}
+{
+  // The real case: a speech recogniser emitting a hundred words before the
+  // first full stop, but with commas where the speaker drew breath.
+  const runOn = {
+    speaker: 'Them', name: null,
+    text: Array.from({ length: 14 }, (_, i) => `and then we looked at option ${i} carefully`).join(', ') + '.',
+  };
+  const out = splitLongTurns([runOn]);
+  ok('a run-on sentence falls back to its commas', out.length > 1, `${out.length} lines`);
+  ok('and every line comes in under the limit',
+    out.every((t) => t.text.split(/\s+/).filter(Boolean).length <= MAX_WORDS_PER_LINE));
+  eq('still without changing a word', out.map((t) => t.text).join(' '), runOn.text);
 }
 {
   const named = { speaker: 'Them', name: 'Casey Nolan', text: Array.from({ length: 30 }, (_, i) => `Point ${i} made clearly.`).join(' ') };

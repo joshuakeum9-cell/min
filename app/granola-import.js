@@ -133,6 +133,21 @@ export const MAX_WORDS_PER_LINE = 55;
  * In the app these pieces merge back into one bubble, which is right: the
  * person really did speak without stopping. The gain is in the file.
  */
+function splitAtCommas(sentence, max) {
+  const clauses = String(sentence).split(/(?<=,)\s+/).filter(Boolean);
+  const out = [];
+  let buffer = [];
+  let count = 0;
+  for (const clause of clauses) {
+    const n = words(clause);
+    if (count && count + n > max) { out.push(buffer.join(' ')); buffer = []; count = 0; }
+    buffer.push(clause);
+    count += n;
+  }
+  if (buffer.length) out.push(buffer.join(' '));
+  return out;
+}
+
 export function splitLongTurns(turns, opts = {}) {
   const max = Number(opts.maxWords) > 0 ? Number(opts.maxWords) : MAX_WORDS_PER_LINE;
   const out = [];
@@ -140,6 +155,16 @@ export function splitLongTurns(turns, opts = {}) {
     if (words(turn.text) <= max) { out.push(turn); continue; }
     // Keep the terminator with its sentence: split after . ! or ? plus a space.
     const sentences = String(turn.text).split(/(?<=[.!?])\s+/).filter(Boolean);
+    /*
+     * A speech recogniser transcribing a fast talker emits run-on text with no
+     * full stop for a hundred words at a time, and one measured line here came
+     * out at 946 characters because there was simply nothing to split on. When
+     * a single "sentence" is oversized, fall back to its commas: a clause
+     * boundary is still a place a person pauses, so the break reads naturally.
+     * If even a clause is oversized it is left whole, because a line cut
+     * mid-clause reads like a transcription error.
+     */
+    const pieces = sentences.flatMap((s) => (words(s) <= max ? [s] : splitAtCommas(s, max)));
     let buffer = [];
     let count = 0;
     const flush = () => {
@@ -148,7 +173,7 @@ export function splitLongTurns(turns, opts = {}) {
       buffer = [];
       count = 0;
     };
-    for (const sentence of sentences) {
+    for (const sentence of pieces) {
       const n = words(sentence);
       // Adding this sentence would overflow a line that already has something
       // in it, so close that line first. A lone oversized sentence still goes
