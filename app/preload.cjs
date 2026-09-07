@@ -110,6 +110,13 @@ contextBridge.exposeInMainWorld('api', {
    * calendar occurrence, so the note it opens is that meeting's.
    */
   onMeetingAlertTake: (cb) => subscribe('meeting-alert-take', cb),
+  /**
+   * "Take notes" on a "Meeting detected" card. The payload is { app }, the
+   * program that opened the microphone; the note it opens is a fresh one.
+   */
+  onMeetingDetectedTake: (cb) => subscribe('meeting-detected-take', cb),
+  /** "Notification settings" on that card: show the Settings view. */
+  onOpenSettings: (cb) => subscribe('open-settings', cb),
   /** 'focus' | 'stop', raised by the floating indicator. */
   onIndicatorCommand: (cb) => subscribe('indicator-command', cb),
 });

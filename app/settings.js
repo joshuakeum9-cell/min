@@ -44,6 +44,17 @@ export const DEFAULTS = Object.freeze({
   // and clamps the result to a live display, because a saved position is only
   // ever a hint and the monitor it was saved on may be gone.
   indicatorPosition: '',
+  // Start with Windows, hidden in the tray, so the meeting card can appear when
+  // MIN is not in front. Applied by main through app.setLoginItemSettings; the
+  // settings pane only stores the wish.
+  startAtLogin: true,
+  // Show the "Meeting detected" card when another program opens the
+  // microphone. Read from the record Windows keeps, never by listening.
+  micDetect: true,
+  // Apps the user answered "Turn off notifications for" on: their raw registry
+  // keys joined by ';'. A string so it rides the typeof allow-list like
+  // indicatorPosition does; main and the settings pane split it.
+  micDetectMuted: '',
 });
 
 // Only these keys are ever read from disk or accepted from the renderer. A

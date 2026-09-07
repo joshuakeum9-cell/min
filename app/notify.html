@@ -24,14 +24,22 @@
 <title>MIN meeting reminder</title>
 <style>
   /*
-   * The meeting popup: one card in the top right of the screen, about a minute
-   * before a calendar meeting starts, asking whether to take notes on it.
+   * The meeting popup: one card in the top right of the screen, asking whether
+   * to take notes. It shows one of two things: a calendar meeting about a minute
+   * before it starts, or a meeting Windows says another app has just opened the
+   * microphone for. The second kind drops the time line, since there is no
+   * calendar event to have one, and grows a chevron beside "Take notes" with a
+   * small menu under it, because a detected call is the one that can be wrong
+   * about you and needs a way to say "not for this app again".
    *
    * This document IS the window: the window is sized to the card, so the page
    * background is transparent and #card fills it edge to edge. That also rules
    * out a drop shadow, which would be clipped at the window bounds, so the card
    * earns its edge on a wallpaper from a hairline border instead. Consistent
-   * with the rest of MIN, which has no shadows.
+   * with the rest of MIN, which has no shadows. The menu opens in the flow of
+   * the card rather than floating over it for the same reason: it would be cut
+   * off at the window's edge, so instead the card grows and notify.js tells
+   * main the new height to grow the window to.
    *
    * Where the recording nub is deliberately translucent, this card is fully
    * opaque: the nub is a status light, but this one carries a meeting title you
@@ -56,7 +64,9 @@
     --mono:'IBM Plex Mono', ui-monospace, Consolas, monospace;
     --fs-md:14px; --fs-sm:13px; --fs-xs:12px;
     --lh-title:1.35; --lh-body:1.5; --lh-ctl:1;
-    --r-card:12px; --r-pill:999px;
+    /* --r-ctl copied verbatim from index.html's :root for the menu items, which
+       are .row-menu-item and take its radius. Same value, not re-picked. */
+    --r-ctl:6px; --r-card:12px; --r-pill:999px;
   }
 
   * { box-sizing:border-box; }
@@ -127,11 +137,25 @@
        text, not prose. */
     font-variant-numeric:tabular-nums;
   }
+  /* A detected call has no calendar event and so no time range. display:none
+     rather than an empty line, because an empty flex item still takes its gap
+     and would leave a blank strip between the app name and the button. */
+  #card[data-kind="detected"] #notifyTime { display:none; }
+
+  /*
+   * "Take notes" and, on a detected card, the chevron beside it. One pill
+   * group the way Granola draws it: the two buttons touch, and the 1px gap
+   * between them shows the card's white through as the divider, so the join
+   * needs no colour of its own.
+   */
+  .actions {
+    align-self:flex-start; margin-top:11px;
+    display:flex; align-items:center; gap:1px;
+  }
 
   /* Copied from .btn.primary in index.html rather than shared, for the same
      reason as the tokens: this window cannot reach that stylesheet. */
   #notifyTake {
-    align-self:flex-start; margin-top:11px;
     display:inline-flex; align-items:center; height:32px; padding:0 16px;
     border:1px solid var(--ink); border-radius:var(--r-pill);
     background:var(--ink); color:var(--surface-raised);
@@ -141,6 +165,56 @@
     transition:background .12s, border-color .12s;
   }
   #notifyTake:hover { background:#000; border-color:#000; }
+  /* Squared where it meets the chevron, so the two read as one pill. */
+  #card[data-kind="detected"] #notifyTake { border-radius:var(--r-pill) 0 0 var(--r-pill); }
+
+  /* The other half of that pill. Same fill and hover as the button it is
+     attached to, so it is not a second control competing with the first, just
+     the end of it that opens. Only the detected kind has anything to open. */
+  #notifyMore {
+    display:none;
+    width:30px; height:32px; padding:0;
+    place-items:center;
+    border:1px solid var(--ink); border-radius:0 var(--r-pill) var(--r-pill) 0;
+    background:var(--ink); color:var(--surface-raised);
+    cursor:pointer;
+    transition:background .12s, border-color .12s;
+  }
+  #card[data-kind="detected"] #notifyMore { display:grid; }
+  #notifyMore:hover { background:#000; border-color:#000; }
+  /* Points up while the menu is open: the same glyph, saying "close". */
+  #notifyMore[aria-expanded="true"] svg { transform:rotate(180deg); }
+
+  /*
+   * Copied from .row-menu and .row-menu-item in index.html, minus two things.
+   * The shadow: .row-menu carries the only one in the system, DESIGN.md calls
+   * it a lapse, and here it would be clipped at the window's edge anyway. And
+   * the absolute position: this menu sits in the card's flow, below the
+   * buttons, so opening it makes the card taller and the window grows to match
+   * rather than the menu falling off the bottom of a 137px window.
+   */
+  #notifyMenu {
+    display:flex; flex-direction:column; margin-top:8px; padding:4px;
+    background:var(--surface-raised); border:1px solid var(--hairline);
+    border-radius:var(--r-card);
+  }
+  #notifyMenu[hidden] { display:none; }
+  .menu-item {
+    display:block; width:100%; margin:0; padding:6px 10px; text-align:left;
+    border:none; border-radius:var(--r-ctl); background:transparent;
+    font-family:inherit; font-weight:400; font-size:var(--fs-sm);
+    /*
+     * --lh-title, not the --lh-ctl the row menu uses. That menu's one item never
+     * wraps; the mute item here ends in an app name main labels from whatever
+     * Windows recorded, which can be long, and the flat line-height is never
+     * used on text that can wrap. The padding is a pixel less to land the
+     * single-line item at the same height as a row menu item.
+     */
+    line-height:var(--lh-title); color:var(--ink);
+    overflow-wrap:anywhere;
+    cursor:pointer;
+  }
+  .menu-item:hover, .menu-item:focus-visible { background:var(--rail-hover); outline:none; }
 
   /* Quiet on purpose. Dismissing is the answer most of these get, but it should
      not compete with the button that is the reason the window opened. */
@@ -161,7 +235,10 @@
   <!--
     The card ships with a sample meeting in it so the page can be styled by
     opening it in a browser, where no preload runs. notify.js clears these three
-    lines the moment it finds a real bridge to push a real meeting.
+    lines the moment it finds a real bridge to push a real meeting. The other
+    kind has a sample too, Chrome in the menu below: open the file with
+    #detected on the end of the address and notify.js switches the card over to
+    it, with no bridge needed.
   -->
   <div id="card">
     <button id="notifyDismiss" type="button" title="Dismiss" aria-label="Dismiss">
@@ -172,7 +249,24 @@
     <p class="eyebrow"><span id="notifyWhen">In 1 minute</span></p>
     <p id="notifyTitle">Weekly product sync</p>
     <p id="notifyTime">3:00 PM – 4:00 PM</p>
-    <button id="notifyTake" type="button">Take notes</button>
+    <div class="actions">
+      <button id="notifyTake" type="button">Take notes</button>
+      <button id="notifyMore" type="button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" aria-controls="notifyMenu">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    <!--
+      Three items, in this order, each a real button main can be told about by
+      its data-cmd. The app name in the second is the only text in here that
+      comes from outside the app; notify.js writes it with textContent.
+    -->
+    <div id="notifyMenu" role="menu" hidden>
+      <button class="menu-item" type="button" role="menuitem" data-cmd="open">Open MIN</button>
+      <button class="menu-item" type="button" role="menuitem" data-cmd="mute">Turn off notifications for <span id="notifyMuteApp">Chrome</span></button>
+      <button class="menu-item" type="button" role="menuitem" data-cmd="settings">Notification settings</button>
+    </div>
   </div>
   <script type="module" src="./notify.js"></script>
 </body>

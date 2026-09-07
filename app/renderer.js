@@ -210,6 +210,19 @@ async function boot() {
     if (!startRecording()) setStatus('Could not start recording that meeting.', 'warn');
   });
 
+  // "Take notes" on a "Meeting detected" card: a fresh note, untitled (the
+  // title saves as it is typed), recording at once. The app name is not made
+  // the title: "Chrome" is where the call is, not what it is about.
+  api?.onMeetingDetectedTake?.(() => {
+    if (isRecording()) {
+      setStatus('Already recording. Press Stop before starting another note.', 'warn');
+      return;
+    }
+    navigate('note', { prefill: { title: '' } });
+    if (!startRecording()) setStatus('Could not start recording.', 'warn');
+  });
+  api?.onOpenSettings?.(() => navigate('settings'));
+
   navigate('home');
 }
 

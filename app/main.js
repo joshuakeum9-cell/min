@@ -13,7 +13,8 @@
  *     meeting.json     timings, devices, gap markers, integrity check
  */
 
-import { app, BrowserWindow, Menu, screen, session, desktopCapturer, ipcMain, shell, clipboard, powerSaveBlocker } from 'electron';
+import { app, BrowserWindow, Menu, Tray, nativeImage, screen, session, desktopCapturer, ipcMain, shell, clipboard, powerSaveBlocker } from 'electron';
+import { execFile as execFileCp } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
@@ -29,6 +30,7 @@ import {
   nextSegment, withSegment, segmentsOf, appendTranscript, offsetSamples,
 } from './meeting-schema.js';
 import { pendingAlert, nextWakeMs, alertKey } from './meeting-alerts.js';
+import { parseMicUse, pendingDetections, sessionId, labelFor } from './mic-watch.js';
 // From the import-free module, deliberately NOT from live.js: importing live.js
 // here would evaluate m0/lib/models.js before the MIN_MODELS_DIR line below
 // runs, and a packaged build would then look for its models inside the asar.
@@ -133,8 +135,18 @@ function externalOnly(contents) {
   });
 }
 
+/*
+ * Launched by Windows at sign-in (the login item passes --hidden), the window
+ * is created but not shown: MIN sits in the tray, watching for a meeting, and
+ * the first thing the user sees is the card, not the app. Launched by hand, it
+ * shows as always.
+ */
+const startHidden = process.argv.includes('--hidden');
+let quitting = false;
+
 function createWindow() {
   win = new BrowserWindow({
+    show: !startHidden,
     // A 420px always-on-top strip reads as a sticky note whatever the styling.
     // The window is now a document window: rail, agenda and a centred column.
     // Staying on top while not recording is the behaviour of a widget, so it is
@@ -201,6 +213,22 @@ function createWindow() {
     win = null;
     destroyIndicator();
   });
+
+  /*
+   * Closing the window hides it to the tray rather than quitting, because the
+   * meeting card and the calendar prompt only work while the process is alive,
+   * and both exist for the moments MIN is not in front. Quit lives on the tray
+   * icon and in before-quit, which sets `quitting` so this lets the close go.
+   * A recording keeps running behind a hidden window; the floating pill says
+   * so, which is why hide and show are wired to the same visibility sync.
+   */
+  win.on('close', (e) => {
+    if (quitting || process.platform === 'darwin' || !tray) return;
+    e.preventDefault();
+    win.hide();
+  });
+  win.on('hide', syncIndicatorVisibility);
+  win.on('show', syncIndicatorVisibility);
 
   // Drives the floating indicator: hidden while this window is in front.
   win.on('focus', syncIndicatorVisibility);
@@ -1092,7 +1120,12 @@ const SETTINGS_LOG = path.join(app.getPath('userData'), 'settings.log');
 
 ipcMain.handle('settings-set', (_evt, patch) => {
   try {
-    return settings.set(patch);
+    const result = settings.set(patch);
+    if (patch && typeof patch === 'object') {
+      if ('startAtLogin' in patch) applyLoginItem();
+      if ('micDetect' in patch) syncMicWatch();
+    }
+    return result;
   } catch (err) {
     const keys = patch && typeof patch === 'object' ? Object.keys(patch).join(',') : typeof patch;
     const line = `${new Date().toISOString()} save failed for [${keys}]: ${err?.code ?? 'no code'} ${err?.message ?? err}\n`;
@@ -1419,6 +1452,141 @@ const calendar = createCalendarStore({
 ipcMain.handle('calendar-refresh', () => calendar.refresh());
 ipcMain.handle('calendar-upcoming', (_evt, opts) => calendar.upcoming(opts?.days ?? 7));
 
+/* -------------------------------------------------- tray, login, mic watch */
+
+/*
+ * MIN lives in the tray so it can be there before the meeting is.
+ *
+ * Both cards, the calendar prompt and "Meeting detected", exist for the moment
+ * a meeting starts, which is exactly when MIN is not the window in front and
+ * quite possibly not open at all. So: a login item starts it hidden at sign-in,
+ * closing the window hides it rather than quitting, and the tray icon is where
+ * it can be found again and where Quit lives.
+ */
+let tray = null;
+
+function showMain() {
+  if (!win || win.isDestroyed()) { createWindow(); return; }
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+}
+
+function createTray() {
+  if (tray) return tray;
+  try {
+    const icon = nativeImage.createFromPath(path.join(HERE, 'tray.png'));
+    tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
+    tray.setToolTip('MIN');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Open MIN', click: () => showMain() },
+      { type: 'separator' },
+      { label: 'Quit MIN', click: () => app.quit() },
+    ]));
+    tray.on('click', () => showMain());
+    tray.on('double-click', () => showMain());
+  } catch {
+    // No tray means the old behaviour: closing the window quits. Better than a
+    // process with no way back to it.
+    tray = null;
+  }
+  return tray;
+}
+
+/**
+ * Start at sign-in, or stop. Only for the installed app: registering the
+ * development electron.exe as a Windows login item would start a copy of the
+ * repo at every boot of the developer's machine.
+ */
+function applyLoginItem() {
+  if (!app.isPackaged) return;
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: settings.get('startAtLogin') !== false,
+      args: ['--hidden'],
+    });
+  } catch { /* a login item is a convenience; never fail the app over it */ }
+}
+
+/*
+ * Meeting detection. Windows keeps a record of every program that opens the
+ * microphone and whether it still holds it, in the registry under the
+ * CapabilityAccessManager consent store. reg.exe reads it in about a hundred
+ * milliseconds. Polled every three seconds while the setting is on: a card a
+ * few seconds after the call connects is the experience, and a native
+ * registry watch would need code this project does not ship. MIN never opens
+ * the microphone itself to watch for anything.
+ *
+ * One card per session (one program, one start time). A card is not shown
+ * while MIN is recording, while a calendar prompt is up, or for the program
+ * currently on a card; it closes itself when the program lets the microphone
+ * go, because a meeting that ended does not need an offer to take notes on it.
+ */
+const MIC_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone';
+const MIC_POLL_MS = 3000;
+const micSelfPaths = [process.execPath, ...(app.isPackaged ? [] : [path.dirname(HERE)])];
+let micTimer = null;
+let micBusy = false;
+const micSeen = new Set();
+let micShown = null;         // sessionId of the detection currently on the card
+
+function mutedApps() {
+  return String(settings.get('micDetectMuted') ?? '').split(';').map((s) => s.trim()).filter(Boolean);
+}
+
+function syncMicWatch() {
+  const on = process.platform === 'win32' && settings.get('micDetect') !== false;
+  if (on && !micTimer) {
+    micTimer = setInterval(pollMicUse, MIC_POLL_MS);
+    micTimer.unref?.();
+    pollMicUse();
+  } else if (!on && micTimer) {
+    stopMicWatch();
+  }
+}
+
+function stopMicWatch() {
+  if (micTimer) { clearInterval(micTimer); micTimer = null; }
+  if (notifyDetected) closeNotify();
+}
+
+function pollMicUse() {
+  if (micBusy) return;
+  micBusy = true;
+  execFileCp('reg', ['query', MIC_KEY, '/s'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+    micBusy = false;
+    if (err || !stdout) return;
+    let entries;
+    try { entries = parseMicUse(stdout); } catch { return; }
+    onMicUse(entries);
+  });
+}
+
+function onMicUse(entries) {
+  // The program on the card let go of the microphone: the meeting is over, or
+  // it never was one. Either way the offer comes down on its own.
+  if (micShown && notifyDetected) {
+    const still = entries.some((e) => e.active && sessionId(e) === micShown);
+    if (!still) closeNotify();
+  }
+  if (recordingState.recording === true) return;
+  if (notifyEvent || notifyDetected) return;
+
+  const due = pendingDetections(entries, { selfPaths: micSelfPaths, muted: mutedApps(), seen: micSeen });
+  if (!due.length) return;
+  const entry = due[0];
+  const id = sessionId(entry);
+  micSeen.add(id);
+  // A set that only grows would remember every call this machine ever had.
+  if (micSeen.size > 200) for (const k of [...micSeen].slice(0, 100)) micSeen.delete(k);
+  micShown = id;
+  notifyDetected = { app: labelFor(entry), appKey: entry.key };
+  createNotify();
+  sendNotifyMeeting();
+  notifyLinger = setTimeout(closeNotify, NOTIFY_LINGER_MS);
+  notifyLinger.unref?.();
+}
+
 /* ----------------------------------------------------------- meeting alert */
 
 /*
@@ -1444,6 +1612,7 @@ const NOTIFY_LINGER_MS = 3 * 60 * 1000;
 let notifyWin = null;
 let notifyReady = false;
 let notifyEvent = null;      // the occurrence currently on screen
+let notifyDetected = null;   // { app, appKey } when the card is a detection instead
 let notifyTimer = null;      // the next poll
 let notifyLinger = null;     // the auto-dismiss
 // Occurrences already offered. Kept for the life of the process: a prompt the
@@ -1499,16 +1668,22 @@ function createNotify() {
 }
 
 function sendNotifyMeeting() {
-  if (!notifyWin || notifyWin.isDestroyed() || !notifyReady || !notifyEvent) return;
+  if (!notifyWin || notifyWin.isDestroyed() || !notifyReady) return;
+  if (notifyDetected) {
+    notifyWin.webContents.send('notify-meeting', {
+      kind: 'detected',
+      app: String(notifyDetected.app ?? '').slice(0, 80),
+      appKey: String(notifyDetected.appKey ?? '').slice(0, 400),
+    });
+    return;
+  }
+  if (!notifyEvent) return;
   const startMs = Date.parse(notifyEvent.start);
   notifyWin.webContents.send('notify-meeting', {
+    kind: 'meeting',
     title: String(notifyEvent.title ?? '').slice(0, 200),
     start: notifyEvent.start ?? null,
     end: notifyEvent.end ?? null,
-    // null, not 0, when the start will not parse: 0 is a real offset meaning
-    // "starting exactly now", which is the common case, and notify.js reads it
-    // as one. Number.isFinite(null) is false, so the page falls back to the
-    // event's own start and then to an empty line.
     startsInMs: Number.isFinite(startMs) ? startMs - Date.now() : null,
   });
 }
@@ -1516,6 +1691,8 @@ function sendNotifyMeeting() {
 function closeNotify() {
   if (notifyLinger) { clearTimeout(notifyLinger); notifyLinger = null; }
   notifyEvent = null;
+  notifyDetected = null;
+  micShown = null;
   if (notifyWin && !notifyWin.isDestroyed()) notifyWin.destroy();
   notifyWin = null;
   notifyReady = false;
@@ -1555,7 +1732,7 @@ function checkAlerts() {
    */
   const busy = recordingState.recording === true;
 
-  if (on && !busy && !notifyEvent) {
+  if (on && !busy && !notifyEvent && !notifyDetected) {
     const due = pendingAlert(events, Date.now(), { alerted: alertedKeys });
     if (due?.event) {
       notifyEvent = due.event;
@@ -1579,19 +1756,55 @@ function checkAlerts() {
  * recording it; 'dismiss' just closes. Either way the occurrence stays in
  * alertedKeys, so neither answer is asked again.
  */
-ipcMain.on('notify-command', (evt, command) => {
+ipcMain.on('notify-command', (evt, command, detail) => {
   if (!notifyWin || notifyWin.isDestroyed() || evt.sender !== notifyWin.webContents) return;
-  if (command !== 'take' && command !== 'dismiss') return;
+
+  // The card's menu opening or closing: the window grows to fit it and shrinks
+  // back. The card measured itself; this only clamps the number to something a
+  // 320px-wide notification could honestly need.
+  if (command === 'menu') {
+    const h = Number(detail?.height);
+    if (Number.isFinite(h)) {
+      const height = Math.max(60, Math.min(640, Math.round(h)));
+      /*
+       * Constraints first. A resizable:false window on Windows takes its
+       * minimum size from the last size it was given, so after growing for the
+       * menu a plain setSize back down was refused and the card sat 90px too
+       * tall. The floor is a sanity number, not the calendar card's height: a
+       * detected card has no time line and measures 114, and the page's own
+       * measurement is the truth this window is sized to.
+       */
+      notifyWin.setMinimumSize(NOTIFY_WIDTH, 60);
+      notifyWin.setMaximumSize(NOTIFY_WIDTH, 640);
+      notifyWin.setSize(NOTIFY_WIDTH, height, false);
+    }
+    return;
+  }
+  if (!['take', 'dismiss', 'open', 'mute', 'settings'].includes(command)) return;
 
   const ev = notifyEvent;
+  const det = notifyDetected;
   closeNotify();
-  if (command !== 'take' || !ev || !win || win.isDestroyed()) return;
 
-  // The user asked for this one, so taking focus is what they wanted.
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
-  win.webContents.send('meeting-alert-take', ev);
+  if (command === 'dismiss') return;
+  if (command === 'mute') {
+    // "Turn off notifications for Chrome": remembered by the app's registry
+    // key, so the same program is never offered again, whatever it is doing.
+    if (det?.appKey) {
+      const list = mutedApps();
+      if (!list.includes(det.appKey)) settings.set({ micDetectMuted: [...list, det.appKey].join(';') });
+    }
+    return;
+  }
+  if (!win || win.isDestroyed()) return;
+
+  // Every remaining answer asks for the app itself, so taking focus is what the
+  // user wanted.
+  showMain();
+  if (command === 'open') return;
+  if (command === 'settings') { win.webContents.send('open-settings'); return; }
+  if (det) { win.webContents.send('meeting-detected-take', { app: det.app }); return; }
+  if (ev) win.webContents.send('meeting-alert-take', ev);
 });
 
 /* -------------------------------------------------------------------- live */
@@ -1897,6 +2110,8 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
 // A worker holds a 650 MB model and has nothing to report to once the window
 // is gone, so quitting should not leave one running.
 app.on('before-quit', async () => {
+  quitting = true;
+  stopMicWatch();
   // First and outside the try: a transparent always-on-top window that outlives
   // its app is the classic stray-rectangle-on-the-desktop bug, and it must not
   // depend on whether the worker modules happened to load.
@@ -1921,11 +2136,9 @@ app.on('before-quit', async () => {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.focus();
-  });
+  // A second launch, including the desktop shortcut while MIN sits in the
+  // tray, brings the existing window back rather than starting another.
+  app.on('second-instance', () => showMain());
 
   app.whenReady().then(() => {
     createWindow();
@@ -1942,12 +2155,20 @@ if (!app.requestSingleInstanceLock()) {
      */
     recoverCaptures().catch(() => { /* every folder it cannot repair, it leaves */ });
     checkAlerts();
+    createTray();
+    applyLoginItem();
+    syncMicWatch();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      else showMain();
     });
   });
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform === 'darwin') return;
+  // With a tray icon the process outlives its window on purpose. Without one
+  // (the icon could not be created) the old rule holds, so a window that goes
+  // away does not leave a process nobody can reach.
+  if (!tray) app.quit();
 });
