@@ -10,6 +10,8 @@
  * an error message. The main process follows the same rule (see calendar.js).
  */
 
+import { labelForKey } from './mic-watch.js';
+
 /**
  * The assistants a user might already pay for. The app never sees a login: it
  * puts the prompt on the clipboard and opens the provider's site in the normal
@@ -73,6 +75,9 @@ export function initSettings({ api }) {
   const onTopEl = $('alwaysOnTop');
   const fillersEl = $('stripFillers');
   const alertsEl = $('meetingAlerts');
+  const startEl = $('startAtLogin');
+  const micEl = $('micDetect');
+  const mutedEl = $('micDetectMuted');
   const providerSel = $('defaultProvider');
   const openDirBtn = $('openMeetingsDir');
 
@@ -98,6 +103,50 @@ export function initSettings({ api }) {
 
   let current = {};
 
+  /** The mute list as stored: app keys joined by ';', empty meaning none. */
+  const mutedKeys = (s) => String(s ?? '').split(';').filter(Boolean);
+
+  /**
+   * The apps muted from the "Meeting detected" card, one row each with a way
+   * back. Built with createElement and textContent only: the keys are registry
+   * subkey names, which is to say text from outside the app, and the display
+   * name is derived from them.
+   */
+  function renderMuted(keys) {
+    if (!mutedEl) return;
+    while (mutedEl.firstChild) mutedEl.removeChild(mutedEl.firstChild);
+    if (!keys.length) {
+      const p = document.createElement('p');
+      p.className = 'help';
+      p.textContent = 'No apps are muted.';
+      mutedEl.appendChild(p);
+      return;
+    }
+    for (const key of keys) {
+      const row = document.createElement('div');
+      row.className = 'mutedApp';
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = labelForKey(key);
+      // Two entries can share a name (Edge and its WebView both come out as
+      // "Edge"), so the tooltip carries the path that tells them apart. The
+      // '#' is how the registry spells a backslash in a key name.
+      name.title = key.replace(/#/g, '\\');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn sm';
+      btn.textContent = 'Allow again';
+      // Saves the rest of the list rather than deleting this key from a copy
+      // held here, so two quick clicks cannot resurrect an app the first one
+      // removed: each click works from what main last returned.
+      btn.addEventListener('click', () => {
+        save({ micDetectMuted: mutedKeys(current.micDetectMuted).filter((k) => k !== key).join(';') });
+      });
+      row.append(name, btn);
+      mutedEl.appendChild(row);
+    }
+  }
+
   /** Push the settings object into the controls. */
   function render(s) {
     current = s ?? {};
@@ -118,6 +167,9 @@ export function initSettings({ api }) {
     if (onTopEl) onTopEl.checked = Boolean(current.alwaysOnTop);
     if (fillersEl) fillersEl.checked = Boolean(current.stripFillers);
     if (alertsEl) alertsEl.checked = Boolean(current.meetingAlerts);
+    if (startEl) startEl.checked = Boolean(current.startAtLogin);
+    if (micEl) micEl.checked = Boolean(current.micDetect);
+    renderMuted(mutedKeys(current.micDetectMuted));
     if (providerSel) {
       const id = current.provider ?? '';
       providerSel.value = PROVIDERS.some((p) => p.id === id) ? id : '';
@@ -186,6 +238,12 @@ export function initSettings({ api }) {
   // Read on the next poll rather than needing a restart: main checks the
   // setting each time round its loop.
   alertsEl?.addEventListener('change', () => save({ meetingAlerts: alertsEl.checked }));
+  // Main registers or removes the login item when this lands; the view only
+  // records the choice, so nothing here touches the OS.
+  startEl?.addEventListener('change', () => save({ startAtLogin: startEl.checked }));
+  // Same shape as meetingAlerts: main checks the setting each time round its
+  // microphone poll, so this takes effect without a restart.
+  micEl?.addEventListener('change', () => save({ micDetect: micEl.checked }));
   providerSel?.addEventListener('change', () => save({ provider: providerSel.value }));
 
   openDirBtn?.addEventListener('click', async () => {

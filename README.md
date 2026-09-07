@@ -124,6 +124,38 @@ lead moment does not silently miss the meeting you are already sitting in. And l
 floating pill, the card cannot take focus, which is the point of it while a call is
 starting; the cost is that its X is the way out of it rather than Escape.
 
+**Meeting detected.** The other prompt is for the meeting that is not on your calendar.
+When another app opens your microphone, whether that is Zoom, Teams, Chrome running a call,
+or anything else, the same kind of card appears in the top right corner saying "Meeting
+detected" and naming the app, and its "Take notes" button starts a note and begins
+recording. A chevron beside the button opens a short menu: Open MIN, Turn off notifications
+for that app, and Notification settings. MIN does not listen for any of this. Windows keeps
+its own record of which programs have used the microphone and when, the record behind the
+microphone icon in the system tray and the per-app activity it shows under Settings >
+Privacy & security > Microphone, and MIN reads that record. It never opens the microphone to watch for a
+meeting, so there is nothing to trust it with that you have not already trusted Windows
+with. It also never fires while MIN is already recording: the microphone is in use then
+because you pressed Record, and a card about it would be noise. Its own recordings and
+Windows' own components, such as the Settings app testing your microphone, never count as
+a meeting either.
+
+Turning it off for one app is done from the card, and it stays off for that app only: a
+Chrome that is playing a game with voice chat can be silenced without losing the card for
+Teams. The apps you have muted are listed under Settings > In the background, each with an
+"Allow again" button, and the whole feature is the switch above them, "Tell me when another
+app starts using the microphone", on by default.
+
+**Living in the tray.** A card that appears when a call starts is only useful if MIN is
+running when the call starts, so MIN now starts when you sign in to Windows, hidden, with
+an icon in the tray rather than a window on the screen, and closing its window hides it
+back to the tray instead of quitting. Nothing is recorded or transcribed while it sits
+there: it refreshes the calendar on its usual timer and reads the microphone record,
+waiting for either to give it a reason to speak. Clicking the tray icon brings the window
+back; to really quit, right-click it and choose Quit MIN. Starting at sign-in can be
+switched off under Settings > In the background, where "Start MIN when I sign in to
+Windows" is the first setting; closing to the tray is simply how the window closes, and
+Quit is on the tray icon.
+
 **The two-sided live transcript.** System audio on the left in grey, your microphone on
 the right in green, because they are two separate recordings and not one mixed one. A
 line appears when its speaker pauses, about a third of a second of silence, so a short

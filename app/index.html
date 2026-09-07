@@ -791,6 +791,13 @@
   .fieldRow .result.warn { color:var(--danger); }
   .check { display:flex; align-items:center; gap:10px; cursor:pointer; }
   .check input { width:15px; height:15px; margin:0; accent-color:var(--accent); }
+  /* Settings > In the background: the apps muted from the "Meeting detected"
+     card, one row each. The name takes the row so Allow again keeps one right
+     edge whatever the name's length, and it may wrap rather than overflow: the
+     fallback name is derived from a registry key, and those can be long. */
+  .mutedApp { display:flex; align-items:center; gap:10px; padding:4px 0; }
+  .mutedApp + .mutedApp { border-top:1px solid var(--hairline); }
+  .mutedApp .name { flex:1; min-width:0; font:400 var(--fs-sm)/var(--lh-body) var(--sans); color:var(--ink-2); overflow-wrap:anywhere; }
   .kv { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:8px 0; align-items:baseline; }
   .kv + .kv { border-top:1px solid var(--hairline); }
   .kv .k { font:400 var(--fs-sm)/var(--lh-body) var(--sans); color:var(--ink-3); }
@@ -986,6 +993,24 @@
                 <option value="60">1 hour</option>
               </select>
             </div>
+          </div>
+        </section>
+
+        <section class="card group">
+          <h2>In the background</h2>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="startAtLogin"> Start MIN when I sign in to Windows</label>
+            <p class="help">MIN starts hidden, with an icon in the tray, so it can notice a meeting starting. Closing the window keeps it running there; Quit is on the tray icon.</p>
+          </div>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="micDetect"> Tell me when another app starts using the microphone</label>
+            <p class="help">A small card in the corner, like the one before a calendar meeting, when Zoom, Teams, Chrome or anything else opens your microphone. MIN reads the record Windows keeps of that and never opens the microphone itself.</p>
+          </div>
+          <div class="field">
+            <span class="label">Muted apps</span>
+            <!-- Filled by settings-view.js: one row per app muted from the
+                 card, or one quiet line when there are none. -->
+            <div id="micDetectMuted"></div>
           </div>
         </section>
 

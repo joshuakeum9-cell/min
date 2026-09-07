@@ -15,7 +15,8 @@ none.
 
 Two further top-level documents ship beside it, each its own always-on-top window and each with
 its own hand-copied tokens: `app/indicator.html`, the floating recording widget, and
-`app/notify.html`, the prompt that appears before a calendar meeting. They have their own
+`app/notify.html`, the card in the corner that is either the prompt before a calendar meeting
+or the "Meeting detected" offer when another program opens the microphone. They have their own
 sections at the end of this file.
 
 The marketing page in `docs/index.html` is not documented here and, as of this rewrite, has not
@@ -97,7 +98,7 @@ this morning is not.
 
 **No token in this file is dead.** All 35 custom properties on `index.html`'s `:root`
 (`:80-124`) are referenced by at least one rule outside it, all 9 on `indicator.html`'s and all
-16 on `notify.html`'s are referenced there. The drift has moved in the other direction: the
+17 on `notify.html`'s are referenced there. The drift has moved in the other direction: the
 tokens are clean and it is the **rules** that go stale. See the closing section.
 
 `--fs-xl` is the thinnest of them, down to a single reference now that the agenda numeral has
@@ -375,6 +376,7 @@ three documents.
 | `#status` | none | `--ink-3`, `--danger` warn, `--accent-ink` good | none | `--fs-xs` mono, right-aligned, ellipsis | none |
 | `.group` | `--surface-raised` via `.card` | inherit | `--r-card` | `4px 16px 14px` | 1px `--hairline` |
 | `.kv` | none | `--ink-3` key, `--ink-2` value | 0 | grid `96px minmax(0,1fr)`, `8px 0` | 1px `--hairline` top between rows |
+| `.mutedApp` | none | `--ink-2` name, `.btn.sm` for Allow again | 0 | flex, 10px gap, `4px 0`; the name is `flex:1` with `overflow-wrap:anywhere`, so the button keeps one right edge and a long fallback name wraps rather than overflows | 1px `--hairline` top between rows |
 
 Behaviour the table does not carry:
 
@@ -481,10 +483,23 @@ is the one value that went the other way, invented in the widget and never back-
 
 ## The meeting prompt
 
-`app/notify.html` is the third window: a card in the top right of the screen about a minute
-before a calendar meeting, 320 by 137 (`main.js:968`, `main.js:973`), loaded from
-`main.js:1032`. Like the indicator, the document is the window: the body is transparent and
+`app/notify.html` is the third window: a card in the top right of the screen, 320 wide, that
+is one of two things. About a minute before a calendar meeting it is the prompt, with the
+meeting's title and time. When another program opens the microphone it is the "Meeting
+detected" offer: the same card with the eyebrow reading "Meeting detected", the program's name
+where the title was, no time line, and a chevron beside "Take notes" that opens a three-item
+menu (`Open MIN`, `Turn off notifications for <App>`, `Notification settings`). One document,
+one `data-kind` attribute on `#card`, and the rules under `#card[data-kind="detected"]` are the
+whole difference. Like the indicator, the document is the window: the body is transparent and
 `#card` fills it, which again rules out a shadow and leaves a hairline border to do the work.
+
+The window takes its height from the page. `main.js` opens it at 137, the calendar card's
+height, and the page reports its real height on every card and every menu change (`menu`
+command, `{ open, height }`, measured with the card's `min-height:100%` floor dropped for the
+read): 137 for a meeting, 114 for a detection, 226 with the menu open. Main lifts the window's
+minimum and maximum size before each `setSize`, because a `resizable:false` window on Windows
+pins its minimum to the last size it was given, and without that the card grew for the menu
+and never shrank back.
 
 The height is measured rather than chosen. At 118 the window cut 17px off the bottom of the
 "Take notes" button, measured against the laid-out card; 137 is the card's own height, so it now
@@ -502,16 +517,16 @@ receives clicks, so the buttons work, but key events never reach it, which is wh
 in the corner is the way out and Escape is not.
 
 **It copies tokens by hand, exactly as the indicator does, and for the same reason.** Its
-`:root` (`notify.html:50-60`) declares sixteen, every one of them restated verbatim from
-`index.html` and none invented here:
+`:root` declares seventeen, every one of them restated verbatim from `index.html` and none
+invented here:
 
 `--surface-raised`, `--hairline`, `--ink`, `--ink-2`, `--ink-3`, `--accent-ink`, `--rail-hover`,
 `--mono`, `--fs-md`, `--fs-sm`, `--fs-xs`, `--lh-title`, `--lh-body`, `--lh-ctl`, `--r-card`,
-`--r-pill`.
+`--r-pill`, and `--r-ctl` for the menu items, which arrived with the menu.
 
-**What that obliges you to do.** The same as the indicator, with a wider surface area: sixteen
+**What that obliges you to do.** The same as the indicator, with a wider surface area: seventeen
 values instead of eight, and no build step, no shared file and no test comparing the blocks.
-Change any of those sixteen in `index.html` and change them here in the same commit. Unlike the
+Change any of those seventeen in `index.html` and change them here in the same commit. Unlike the
 indicator, this window is on screen for three minutes at a time and only just before a meeting,
 so a drift here has even less chance of being caught by eye.
 
