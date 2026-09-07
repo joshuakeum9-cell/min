@@ -323,8 +323,8 @@ in `results/` as dated JSON, never overwritten.
 
 ## Where your data lives, and how to delete it
 
-Your meetings are plain markdown in `~/Meetings` (`C:\Users\<you>\Meetings`), the source
-of truth and yours. One folder per meeting:
+Your meetings are plain markdown in `~/Meetings` (`C:\Users\<you>\Meetings`) unless you
+move them, the source of truth and yours. One folder per meeting:
 
 | File | What it is |
 |---|---|
@@ -353,6 +353,36 @@ again. Everything else sits outside your Meetings folder, in `%APPDATA%\MIN`, or
 
 On macOS and Linux the same directory is `~/Library/Application Support/MIN` and
 `~/.config/MIN`; only Windows is tested.
+
+## Using MIN on more than one computer
+
+**Settings > Where meetings are kept** points MIN at any folder you like. Put it somewhere
+a cloud program already syncs and your meetings reach your other computers by themselves,
+with no account for MIN to hold and nothing for you to upload.
+
+MIN finds the ones you already have and offers a button for each: **Use Google Drive**,
+**Use OneDrive**, **Use Dropbox**. One click and every meeting from then on is written into
+`MIN Meetings` inside that folder. Nothing else changes.
+
+This is worth being precise about, because it is the only part of MIN that involves a cloud
+at all. **MIN never signs in to anything.** It has no Google account, no token, no upload
+code, and it never talks to Google, Microsoft or Dropbox. It writes files to a folder on
+your hard drive, and the sync program you were already running does the uploading. If you
+have no such program, nothing is missing: the default folder is on your hard drive and MIN
+works exactly as it always has.
+
+On the second computer, install MIN, sign in to the same cloud program, and press the same
+button. Your meetings appear. A meeting recorded on one machine shows up on the other
+within seconds of syncing, and it is searchable straight away.
+
+Two things to know. **Changing the folder moves nothing**: meetings already saved stay where
+they are, and only new ones go to the new place. And **record on one computer at a time**:
+two machines writing into one synced folder at the same moment is how sync programs end up
+making duplicate copies of a file instead of merging it.
+
+The audio is written into that folder too while a meeting runs, and deleted once its
+transcript is written, so a synced folder sees it briefly and then does not. If you keep
+audio, budget for it: two tracks come to roughly 214 MB per hour.
 
 ## Uninstalling
 
