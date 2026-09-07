@@ -109,7 +109,29 @@ const wavName = (track, n) => (n <= 1 ? `${track}.wav` : `${track}-${n}.wav`);
  * and a single `import` of node:path here would break two of the four.
  */
 const SAFE_WAV = /^[A-Za-z0-9._-]+\.wav$/;
-const safeName = (n) => (typeof n === 'string' && SAFE_WAV.test(n) && !n.includes('..') ? n : null);
+
+/*
+ * Windows keeps these names reserved whatever extension follows, so "NUL.wav"
+ * is the null device and "CON.wav" is the console, not files in this folder.
+ * They pass the pattern above and would send a stat, a read, or an unlink at a
+ * device instead: reading CON blocks forever waiting on console input, which
+ * turns a planted meeting.json into a hang rather than an error. Found by
+ * attacking the guard rather than by reading it.
+ */
+const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i;
+
+/*
+ * A ceiling, because nothing this app writes comes near it: the longest name it
+ * produces is "system-99.wav". A name of a few hundred characters only exists
+ * to push the joined path past what the filesystem will take.
+ */
+const MAX_NAME = 64;
+
+const safeName = (n) => (
+  typeof n === 'string' && n.length <= MAX_NAME &&
+  SAFE_WAV.test(n) && !n.includes('..') && !RESERVED.test(n)
+    ? n : null
+);
 
 /**
  * A segment with only the file names that are safe to act on. A rejected name

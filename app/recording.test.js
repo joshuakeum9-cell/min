@@ -190,6 +190,25 @@ section('segmentsOf , an audio file name is never allowed to leave the folder');
   eq('a POSIX absolute path is refused', planted('/etc/passwd'), null);
   eq('a subfolder is refused, the name must be bare', planted('sub/mic.wav'), null);
   eq('a name that is not audio at all is refused', planted('meeting.json'), null);
+  eq('an alternate data stream is refused', planted('mic.wav:evil'), null);
+  eq('a UNC path is refused', planted('\\\\server\\share\\evil.wav'), null);
+  eq('a drive-relative path is refused', planted('C:mic.wav'), null);
+  /*
+   * Windows keeps these reserved whatever extension follows, so NUL.wav is the
+   * null device and CON.wav is the console. They match the name pattern and
+   * would aim a stat, a read or an unlink at a device: reading CON blocks
+   * forever on console input, turning a planted meeting.json into a hang.
+   * Found by attacking the guard rather than by reading it.
+   */
+  eq('the null device is refused', planted('NUL.wav'), null);
+  eq('the console is refused', planted('CON.wav'), null);
+  eq('a serial port is refused', planted('COM1.wav'), null);
+  eq('a printer port is refused', planted('LPT9.wav'), null);
+  eq('and case does not save them', planted('con.wav'), null);
+  // Nothing this app writes is longer than "system-99.wav"; a 300-character
+  // name exists only to push the joined path past what the filesystem takes.
+  eq('an absurdly long name is refused', planted(`${'a'.repeat(300)}.wav`), null);
+  eq('a long but legitimate name still passes', planted('system-12.wav'), 'system-12.wav');
   eq('a non-string is refused', planted(42), null);
   eq('null stays null', planted(null), null);
   eq('the other track is checked too',
