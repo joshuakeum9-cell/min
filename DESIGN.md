@@ -484,34 +484,42 @@ is the one value that went the other way, invented in the widget and never back-
 ## The meeting prompt
 
 `app/notify.html` is the third window: a card in the top right of the screen, 320 wide, that
-is one of two things. About a minute before a calendar meeting it is the prompt, with the
-meeting's title and time. When another program opens the microphone it is the "Meeting
-detected" offer: the same card with the eyebrow reading "Meeting detected", the program's name
-where the title was, no time line, and a chevron beside "Take notes" that opens a three-item
-menu (`Open MIN`, `Turn off notifications for <App>`, `Notification settings`). One document,
-one `data-kind` attribute on `#card`, and the rules under `#card[data-kind="detected"]` are the
-whole difference. Like the indicator, the document is the window: the body is transparent and
-`#card` fills it, which again rules out a shadow and leaves a hairline border to do the work.
+is one of two things. About a minute before a calendar meeting it is the prompt: a stacked
+card with the olive eyebrow, the meeting's title and time, and a dark "Take notes" button.
+When another program opens the microphone it is the "Meeting detected" offer, and that one is
+a strip, not a stack: "Meeting detected" over the program's name on the left, one white
+bordered pill on the right holding an olive mark, "Take notes" and a chevron, the dismiss X in
+the top-left corner, and the chevron's three-item menu (`Open MIN`, `Turn off notifications
+for <App>`, `Change notification settings`) floating below the strip as its own box rather
+than growing the card around itself. One document, one `data-kind` attribute on `#card`, and
+the rules under `#card[data-kind="detected"]` are the whole difference: the strip is a
+two-column grid where the stack is a flex column, the three text lines sit in a `.text`
+wrapper so they can form one column beside the pill, and the pill is `.actions` itself given a
+border, with the mark as its `::before`. Like the indicator, the document is the window: the
+body is transparent and `#card` fills it, which again rules out a shadow and leaves a hairline
+border to do the work.
 
 The window takes its height from the page. `main.js` opens it at 137, the calendar card's
 height, and the page reports its real height on every card and every menu change (`menu`
 command, `{ open, height }`, measured with the card's `min-height:100%` floor dropped for the
-read): 137 for a meeting, 114 for a detection, 226 with the menu open. Main lifts the window's
+read, and for the detected kind against the menu's bottom edge rather than the card's, since
+that menu hangs outside the card): 137 for a meeting, 62 for a detection, 166 with its menu
+open. Main lifts the window's
 minimum and maximum size before each `setSize`, because a `resizable:false` window on Windows
 pins its minimum to the last size it was given, and without that the card grew for the menu
 and never shrank back.
 
 The height is measured rather than chosen. At 118 the window cut 17px off the bottom of the
 "Take notes" button, measured against the laid-out card; 137 is the card's own height, so it now
-fits with two pixels to spare. The comment at `main.js:969-972` records both numbers. The window
+fits with two pixels to spare. The comment at `main.js:1602-1605` records both numbers. The window
 has to fit the card, not the other way round, and squeezing the card to a round number is what
 produced the clipped button in the first place.
 
 Two decisions separate it from the indicator, both written down in the source. The card is
-**fully opaque** where the recording nub is deliberately translucent (`notify.html:36-39` in the
+**fully opaque** where the recording nub is deliberately translucent (`notify.html:48-51` in the
 header comment): the nub is a status light, but this one carries a meeting title that has to be
 read in a glance, and wallpaper showing through the letters costs more than the floating look is
-worth. And the window is **not focusable** (`main.js:1006-1014`): it appears while a meeting is
+worth. And the window is **not focusable** (`main.js:1641-1648`): it appears while a meeting is
 starting, which is the worst moment to pull focus off a call. A `focusable:false` window still
 receives clicks, so the buttons work, but key events never reach it, which is why the dismiss X
 in the corner is the way out and Escape is not.
@@ -532,24 +540,34 @@ so a drift here has even less chance of being caught by eye.
 
 The copying is deliberate but not total, and the gaps are the same shape as the indicator's:
 
-- No `--sans`. The comment at `notify.html:69-75` gives the reason: a separate BrowserWindow
+- No `--sans`. The comment at `notify.html:83-89` gives the reason: a separate BrowserWindow
   loads its own copy of any face it names, and a 35 KB Archivo download in front of a card that
   has to be legible the instant it appears is a bad trade for one weight of one font. The card
   is the platform sans; the app is Archivo; nobody sees them together.
 - No `--accent` and no `--danger`, because the card has no accent-filled control and no warning
-  state. It does take one of the `--surface` family: `--surface-raised` is both the card's ground
-  (`:93`) and the "Take notes" label sitting on its dark fill (`:137`). That is the difference
-  from the indicator, which copies none of that family and writes a literal ground instead.
+  state. It does take one of the `--surface` family: `--surface-raised` is the card's ground
+  (`:107`), the "Take notes" label sitting on its dark fill (`:165`), and the detected strip's
+  white pill (`:264`). That is the difference from the indicator, which copies none of that
+  family and writes a literal ground instead.
 - Two literals are copied rather than tokenised, both already untokenised in `index.html`:
-  `#000` on `#notifyTake:hover` (`:143`), which is `.btn.primary:hover`, and the 320px card
+  `#000` on `#notifyTake:hover` (`:171`), which is `.btn.primary:hover`, and the 320px card
   width, which matches `NOTIFY_WIDTH` in `main.js` and has to.
 
 What is shared by intent rather than by accident, and should stay that way: `.eyebrow`
-(`notify.html:101-105`) is `.now-label` from the agenda, the same `--accent-ink` uppercase at
+(`notify.html:115-119`) is `.now-label` from the agenda, the same `--accent-ink` uppercase at
 `--fs-xs` with `.08em` tracking, because the two are saying the same thing about the same event.
-`#notifyTake` (`:131-143`) is `.btn.primary`. `#notifyTime` (`:122-129`) is mono and tabular
-like every other time in MIN. `#notifyDismiss` (`:147-154`) takes `--rail-hover`, the one hover
+`#notifyTake` (`:162-171`) is `.btn.primary`. `#notifyTime` (`:136-143`) is mono and tabular
+like every other time in MIN. `#notifyDismiss` (`:225-232`) takes `--rail-hover`, the one hover
 fill.
+
+The detected strip overrides three of those on purpose, and only for its own kind. Its eyebrow
+is `--ink` at `--fs-md`, weight 500, no caps and no tracking: on a one-line strip "Meeting
+detected" is the title, not a label above one, and the program's name drops to `--ink-2` at
+`--fs-sm` beneath it. Its "Take notes" is not `.btn.primary` but plain `--ink` text inside the
+white pill, with the olive mark (`--accent-ink`, the one accent) standing in for the logo the
+reference puts there. And its menu is `position:absolute` below the strip, right-aligned under
+the pill, `width:max-content` capped at the strip's width. None of these leak into the calendar
+card, which is why every one of them is scoped under `#card[data-kind="detected"]`.
 
 ## Don't
 

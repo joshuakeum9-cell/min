@@ -27,19 +27,23 @@
    * The meeting popup: one card in the top right of the screen, asking whether
    * to take notes. It shows one of two things: a calendar meeting about a minute
    * before it starts, or a meeting Windows says another app has just opened the
-   * microphone for. The second kind drops the time line, since there is no
-   * calendar event to have one, and grows a chevron beside "Take notes" with a
-   * small menu under it, because a detected call is the one that can be wrong
-   * about you and needs a way to say "not for this app again".
+   * microphone for. The second kind is a strip rather than a stack: the two
+   * text lines on the left, one white pill on the right holding the mark,
+   * "Take notes" and a chevron, the X in the top-left corner, and the
+   * chevron's small menu hanging below the strip, because a detected call is
+   * the one that can be wrong about you and needs a way to say "not for this
+   * app again".
    *
    * This document IS the window: the window is sized to the card, so the page
    * background is transparent and #card fills it edge to edge. That also rules
    * out a drop shadow, which would be clipped at the window bounds, so the card
    * earns its edge on a wallpaper from a hairline border instead. Consistent
-   * with the rest of MIN, which has no shadows. The menu opens in the flow of
-   * the card rather than floating over it for the same reason: it would be cut
-   * off at the window's edge, so instead the card grows and notify.js tells
-   * main the new height to grow the window to.
+   * with the rest of MIN, which has no shadows. For the same reason the menu
+   * cannot simply overflow the card: anything past the window's edge is cut
+   * off. So notify.js measures the menu's bottom edge along with the card's
+   * and tells main the height to grow the window to. The calendar kind grows
+   * the card around the menu; the detected kind keeps its strip and lets the
+   * menu float below it inside the taller window.
    *
    * Where the recording nub is deliberately translucent, this card is fully
    * opaque: the nub is a status light, but this one carries a meeting title you
@@ -227,6 +231,68 @@
   }
   #notifyDismiss:hover { background:var(--rail-hover); color:var(--ink); }
 
+  /* The text column: nothing for the meeting kind, which stacks as before. */
+  .text { display:flex; flex-direction:column; gap:5px; min-width:0; }
+
+  /*
+   * The detected kind is a strip, not a stack: the reference card is one line
+   * tall, text on the left, one white pill on the right, the X at the top-left
+   * corner, and the menu dropping under the pill. Grid rather than a second
+   * flex direction, because the menu has to take a row of its own below both
+   * columns while the pill stays on the first row.
+   */
+  #card[data-kind="detected"] {
+    display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"text actions";
+    align-items:center; column-gap:12px; row-gap:0;
+    padding:11px 12px 11px 30px;
+    min-height:0;
+  }
+  #card[data-kind="detected"] .text { grid-area:text; gap:1px; }
+  #card[data-kind="detected"] .eyebrow {
+    font-weight:500; font-size:var(--fs-md); line-height:var(--lh-title);
+    color:var(--ink); text-transform:none; letter-spacing:0; padding-right:0;
+  }
+  #card[data-kind="detected"] #notifyTitle {
+    font-weight:400; font-size:var(--fs-sm); color:var(--ink-2); padding-right:0;
+  }
+
+  /* One white pill holding the mark, the button and the chevron. */
+  #card[data-kind="detected"] .actions {
+    grid-area:actions; align-self:center; margin:0;
+    height:36px; padding:0 2px 0 10px; gap:0;
+    border:1px solid var(--hairline); border-radius:var(--r-pill);
+    background:var(--surface-raised);
+  }
+  #card[data-kind="detected"] .actions::before {
+    content:""; width:9px; height:9px; border-radius:var(--r-pill);
+    background:var(--accent-ink); margin-right:7px; flex:none;
+  }
+  #card[data-kind="detected"] #notifyTake {
+    height:34px; padding:0 8px 0 0; border:0; border-radius:0;
+    background:transparent; color:var(--ink);
+  }
+  #card[data-kind="detected"] #notifyTake:hover { background:transparent; color:#000; }
+  #card[data-kind="detected"] #notifyMore {
+    width:28px; height:26px; border:0; border-left:1px solid var(--hairline); border-radius:0 var(--r-pill) var(--r-pill) 0;
+    background:transparent; color:var(--ink-2);
+  }
+  #card[data-kind="detected"] #notifyMore:hover { background:var(--rail-hover); color:var(--ink); }
+
+  /* The X sits at the top-left corner of the strip, where the reference has it. */
+  #card[data-kind="detected"] #notifyDismiss { top:6px; left:6px; right:auto; width:20px; height:20px; }
+  #card[data-kind="detected"] #notifyDismiss svg { width:8px; height:8px; }
+
+  /*
+   * The menu floats below the strip as its own box, the way the reference has
+   * it, rather than growing the card around itself. The card keeps its own
+   * height (no 100% floor for this kind), main grows the transparent window,
+   * and notify.js measures the menu's bottom edge rather than the card's.
+   */
+  #card[data-kind="detected"] #notifyMenu {
+    position:absolute; top:calc(100% + 6px); right:10px;
+    width:max-content; max-width:calc(100% - 20px); margin:0;
+  }
+
   svg { display:block; flex:none; }
   :focus-visible { outline:2px solid var(--accent-ink); outline-offset:1px; }
 </style>
@@ -246,9 +312,11 @@
         <path d="M1 1 L9 9 M9 1 L1 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
     </button>
-    <p class="eyebrow"><span id="notifyWhen">In 1 minute</span></p>
-    <p id="notifyTitle">Weekly product sync</p>
-    <p id="notifyTime">3:00 PM – 4:00 PM</p>
+    <div class="text">
+      <p class="eyebrow"><span id="notifyWhen">In 1 minute</span></p>
+      <p id="notifyTitle">Weekly product sync</p>
+      <p id="notifyTime">3:00 PM – 4:00 PM</p>
+    </div>
     <div class="actions">
       <button id="notifyTake" type="button">Take notes</button>
       <button id="notifyMore" type="button" aria-label="More options" aria-haspopup="menu" aria-expanded="false" aria-controls="notifyMenu">
@@ -265,7 +333,7 @@
     <div id="notifyMenu" role="menu" hidden>
       <button class="menu-item" type="button" role="menuitem" data-cmd="open">Open MIN</button>
       <button class="menu-item" type="button" role="menuitem" data-cmd="mute">Turn off notifications for <span id="notifyMuteApp">Chrome</span></button>
-      <button class="menu-item" type="button" role="menuitem" data-cmd="settings">Notification settings</button>
+      <button class="menu-item" type="button" role="menuitem" data-cmd="settings">Change notification settings</button>
     </div>
   </div>
   <script type="module" src="./notify.js"></script>

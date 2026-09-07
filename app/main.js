@@ -1771,8 +1771,9 @@ ipcMain.on('notify-command', (evt, command, detail) => {
        * minimum size from the last size it was given, so after growing for the
        * menu a plain setSize back down was refused and the card sat 90px too
        * tall. The floor is a sanity number, not the calendar card's height: a
-       * detected card has no time line and measures 114, and the page's own
-       * measurement is the truth this window is sized to.
+       * detected card is a one-line strip that measures 62, 166 with its menu
+       * hanging below it, and the page's own measurement is the truth this
+       * window is sized to.
        */
       notifyWin.setMinimumSize(NOTIFY_WIDTH, 60);
       notifyWin.setMaximumSize(NOTIFY_WIDTH, 640);

@@ -126,10 +126,10 @@ starting; the cost is that its X is the way out of it rather than Escape.
 
 **Meeting detected.** The other prompt is for the meeting that is not on your calendar.
 When another app opens your microphone, whether that is Zoom, Teams, Chrome running a call,
-or anything else, the same kind of card appears in the top right corner saying "Meeting
-detected" and naming the app, and its "Take notes" button starts a note and begins
-recording. A chevron beside the button opens a short menu: Open MIN, Turn off notifications
-for that app, and Notification settings. MIN does not listen for any of this. Windows keeps
+or anything else, a small strip appears in the top right corner saying "Meeting detected"
+and naming the app, and its "Take notes" button starts a note and begins recording. A
+chevron beside the button opens a short menu: Open MIN, Turn off notifications for that
+app, and Change notification settings. MIN does not listen for any of this. Windows keeps
 its own record of which programs have used the microphone and when, the record behind the
 microphone icon in the system tray and the per-app activity it shows under Settings >
 Privacy & security > Microphone, and MIN reads that record. It never opens the microphone to watch for a

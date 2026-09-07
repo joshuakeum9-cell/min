@@ -187,10 +187,15 @@ let menuOpen = false;
 function cardHeight() {
   card.style.minHeight = '0';
   const rect = card.getBoundingClientRect();
+  // A menu that floats below the card (the detected kind) is outside the
+  // card's box, so the window has to reach its bottom edge, not the card's.
+  // A DOMRect is read-only, so the larger of the two is kept in a local.
+  let bottom = rect.bottom;
+  if (menuOpen && !menu.hidden) bottom = Math.max(bottom, menu.getBoundingClientRect().bottom);
   card.style.minHeight = '';
   const page = getComputedStyle(document.body);
   const below = (parseFloat(page.paddingBottom) || 0) + (parseFloat(page.marginBottom) || 0);
-  return Math.ceil(rect.bottom + scrollY + below);
+  return Math.ceil(bottom + scrollY + below);
 }
 
 function reportHeight() {
