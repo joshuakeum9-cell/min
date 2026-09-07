@@ -26,10 +26,18 @@ fixtures/*.wav
 # definition: they are transcripts of actual conversations.
 fixtures/meetings/
 
-# Benchmark output is kept as evidence, but not the raw console logs
-# or the generated note pairs (which embed meeting content).
-results/*.log
-results/counterfactual-*/
+# Benchmark output is kept as evidence, but only the four runs named below.
+# Every other run lands here unignored otherwise, and a benchmark result records
+# the machine it ran on: CPU model, GPU, RAM. A contributor running `npm run m0`
+# would commit their own hardware without noticing. The counterfactual summaries
+# are worse again, since they carry the titles of real meetings.
+# Ignore the contents, not the directory, for the same reason models/* does: a
+# bare "results/" kills the negations below.
+results/*
+!results/asr-chunk-limit-2026-09-02T23-40-43-316Z.json
+!results/bench-asr-2026-09-02T23-21-57-287Z.json
+!results/bench-llm-2026-09-03T00-06-40-037Z.json
+!results/bench-llm-2026-09-03T00-17-39-109Z.json
 
 .DS_Store
 Thumbs.db

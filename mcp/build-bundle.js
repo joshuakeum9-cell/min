@@ -78,7 +78,17 @@ const manifest = {
     { name: 'save_writeup', description: 'Save a finished write-up into the meeting folder' },
     { name: 'writing_guidance', description: 'How the user wants meetings written up' },
   ],
-  compatibility: { runtimes: { node: '>=20.0.0' } },
+  /*
+   * Taken from package.json rather than written out again, so the two can never
+   * drift. They had: this said Node 20 while the server needs 24.
+   *
+   * The server imports library.js, which uses node:sqlite. That is behind a
+   * flag until Node 23.4 and stable in 24. Claude Desktop reading ">=20" would
+   * happily install the extension on Node 20 and the server would then die on
+   * its first import, which reads to the user as "the extension is broken"
+   * rather than "your Node is too old".
+   */
+  compatibility: { runtimes: { node: pkg.engines?.node ?? '>=24.0.0' } },
 };
 
 /** Copy a file, rewriting import paths so the bundle is self-contained and flat. */

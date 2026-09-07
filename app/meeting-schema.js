@@ -88,6 +88,39 @@ const requireTime = (value, field) => {
 /** Segment 1 keeps the schema-1 names so an unresumed meeting looks untouched. */
 const wavName = (track, n) => (n <= 1 ? `${track}.wav` : `${track}-${n}.wav`);
 
+/**
+ * A segment's audio file name, only if it is a plain name inside the meeting
+ * folder.
+ *
+ * meeting.json is NOT this app's private memo. It is a plain file in a folder
+ * the user can open, copy, sync between machines and receive from someone else,
+ * which makes every string in it untrusted input. These names are joined onto
+ * the meeting folder and then handed to stat, to a spawned transcriber and, in
+ * main.js, to fsp.rm. A name of "../../../../Windows/System32/drivers/etc/hosts"
+ * would escape the folder that confine() so carefully checked, because confine
+ * checks the FOLDER and nothing re-checked the name joined onto it.
+ *
+ * Rejected rather than sanitised: a name that is not a bare file name is not a
+ * near miss to be repaired, it is a meeting.json that no version of this app
+ * ever wrote, and quietly turning it into something valid would hide that.
+ *
+ * A regex and no path module, on purpose. This file has ZERO imports because
+ * four callers with no shared module graph read it, the renderer among them,
+ * and a single `import` of node:path here would break two of the four.
+ */
+const SAFE_WAV = /^[A-Za-z0-9._-]+\.wav$/;
+const safeName = (n) => (typeof n === 'string' && SAFE_WAV.test(n) && !n.includes('..') ? n : null);
+
+/**
+ * A segment with only the file names that are safe to act on. A rejected name
+ * becomes null, which every reader already handles: it means "no audio here",
+ * the same as a segment whose wavs have been deleted after transcription.
+ */
+function withSafeFiles(seg) {
+  if (!isObj(seg.files)) return seg;
+  return { ...seg, files: { ...seg.files, mic: safeName(seg.files.mic), system: safeName(seg.files.system) } };
+}
+
 /* ------------------------------------------------------------------ reading */
 
 /**
@@ -107,7 +140,9 @@ export function segmentsOf(meta) {
   // a mic.wav nothing wrote, tells pendingSegments there is audio to transcribe,
   // pushes the first real capture out to mic-2.wav where transcribe.js does not
   // look for it, and then adds the top-level durationSeconds to it a second time.
-  if (Array.isArray(meta.segments)) return meta.segments.filter(isObj);
+  // Every reader of a segment's file names goes through here, which is why the
+  // check lives at this one chokepoint rather than at each of the four callers.
+  if (Array.isArray(meta.segments)) return meta.segments.filter(isObj).map(withSafeFiles);
 
   // A meta with none of these describes no recording at all, so there is no
   // legacy segment to synthesise from it.

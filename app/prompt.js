@@ -28,7 +28,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { isMain } from '../m0/lib/hardware.js';
-import { meetingsDir } from './meetings-dir.js';
+import { meetingsDir, loadMeetingsDirFromSettings } from './meetings-dir.js';
 
 // A function, not a constant: the meetings folder is a setting now, and a
 // constant would bake in the default at import time, before main has read it.
@@ -138,6 +138,10 @@ export async function promptForMeeting(dir) {
 }
 
 if (isMain(import.meta.url)) {
+  // Run from a terminal, so nothing has published the meetings folder yet.
+  // Without this the tool reads ~/Meetings while the app writes somewhere the
+  // user chose, and reports an empty library that is not empty.
+  loadMeetingsDirFromSettings();
   const argv = process.argv.slice(2);
   const printOnly = argv.includes('--print');
   const target = argv.find((a) => !a.startsWith('--'));

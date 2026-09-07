@@ -35,7 +35,7 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { listMeetings, readMeeting, search, reindex, meetingsDir } from '../app/library.js';
-import { setMeetingsDir, meetingsDirFromSettingsText, settingsFilePath } from '../app/meetings-dir.js';
+import { loadMeetingsDirFromSettings } from '../app/meetings-dir.js';
 
 /*
  * This server runs under plain node inside Claude Desktop, with no Electron
@@ -44,9 +44,7 @@ import { setMeetingsDir, meetingsDirFromSettingsText, settingsFilePath } from '.
  * it answering questions about an empty directory while the real one fills up.
  * So it reads MIN's own settings file, the same way MIN does.
  */
-try {
-  setMeetingsDir(meetingsDirFromSettingsText(fs.readFileSync(settingsFilePath(), 'utf8')));
-} catch { /* no settings file yet: the default is the right answer */ }
+loadMeetingsDirFromSettings();
 
 /**
  * Where Electron puts userData for this app, worked out without Electron: this

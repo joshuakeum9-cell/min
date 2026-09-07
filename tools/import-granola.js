@@ -23,11 +23,12 @@
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { toMeetingFolder } from '../app/granola-import.js';
-import { meetingsDir, meetingsDirFromSettingsText, settingsFilePath } from '../app/meetings-dir.js';
+import { loadMeetingsDirFromSettings } from '../app/meetings-dir.js';
 
-const MEETINGS_DIR = meetingsDir();
+// The folder the app is actually pointed at, not the default. Someone who has
+// moved their meetings into a synced folder expects an import to land there.
+const MEETINGS_DIR = loadMeetingsDirFromSettings();
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(name);

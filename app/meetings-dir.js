@@ -29,6 +29,7 @@
 
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs';
 
 /** The environment variable main uses to tell every other module the answer. */
 export const ENV_KEY = 'MIN_MEETINGS_DIR';
@@ -170,5 +171,27 @@ export function meetingsDirFromSettingsText(text, home = os.homedir()) {
     return resolveMeetingsDir(parsed?.meetingsDir, home);
   } catch {
     return defaultMeetingsDir(home);
+  }
+}
+
+/**
+ * Adopt the folder the app has been pointed at, for a process that is not the
+ * app.
+ *
+ * Every command-line entry point needs this. `node app/transcribe.js --all`,
+ * `node app/prompt.js` and the Granola importer each resolved the DEFAULT
+ * folder, so the moment someone pointed MIN at a synced folder the tools were
+ * quietly working on a different, usually empty, directory than the app. The
+ * MCP server had the same problem and solved it by hand; now there is one
+ * helper and one behaviour.
+ *
+ * A missing or unreadable settings file is not an error. It means the app has
+ * never saved one, and the default is then exactly right.
+ */
+export function loadMeetingsDirFromSettings() {
+  try {
+    return setMeetingsDir(meetingsDirFromSettingsText(fs.readFileSync(settingsFilePath(), 'utf8')));
+  } catch {
+    return meetingsDir();
   }
 }

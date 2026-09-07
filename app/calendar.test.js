@@ -65,8 +65,9 @@ const isoDay = (d) => iso(d).slice(0, 10);
 /**
  * Shaped like a real Google "Secret address in iCal format" export: the same
  * property order, the same 75-octet folding, a VTIMEZONE, a VALARM inside the
- * VEVENT, and a recurring university class, which is what the owner's calendar
- * actually contains.
+ * VEVENT, and a recurring weekly class, which is the shape a calendar full of
+ * teaching commonly has. The events are invented; the SHAPE is what is under
+ * test, and real diary entries have no place in a public repository.
  *
  * String.raw so that a backslash in the ICS stays a backslash for the parser to
  * unescape, rather than being consumed by JavaScript first.
@@ -370,7 +371,7 @@ ok('escaped \\n became a real new line', klass.description.includes('case pack; 
 eq('description line count', klass.description.split('\n').length, 3);
 ok('escaped semicolon unescaped', klass.description.includes('case pack; slides'));
 ok('escaped backslash unescaped', klass.description.includes('C:\\Users\\Example\\cases'));
-eq('escaped commas in LOCATION', klass.location, 'Room 210, 1 Campus Drive, New York, NY 10012');
+eq('escaped commas in LOCATION', klass.location, 'Room 210, 1 Campus Drive, Springfield, ST 00000');
 eq('unescapeText handles a trailing lone backslash', _internals.unescapeText('end\\'), 'end\\');
 eq('unescapeText handles all four escapes', _internals.unescapeText('a\\nb\\,c\\;d\\\\e'), 'a\nb,c;d\\e');
 
@@ -618,7 +619,7 @@ section('upcoming , the home screen agenda');
   ok('a meeting already under way is included', Boolean(inClass));
   eq('and is marked in progress', inClass.inProgress, true);
   eq('it carries an attendee count', inClass.attendeeCount, 2);
-  eq('it carries a location', inClass.location, 'Room 210, 1 Campus Drive, New York, NY 10012');
+  eq('it carries a location', inClass.location, 'Room 210, 1 Campus Drive, Springfield, ST 00000');
   eq('it is marked recurring', inClass.recurring, true);
   ok('it has a stable id', /^ev_[0-9a-f]{8}$/.test(inClass.id), inClass.id);
 

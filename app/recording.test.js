@@ -171,6 +171,35 @@ const BODY_2 = [
 
 /* -------------------------------------------------------------------- tests */
 
+section('segmentsOf , an audio file name is never allowed to leave the folder');
+{
+  /*
+   * meeting.json is a plain file the user can copy in, sync from another
+   * machine, or be sent by someone else, so every string in it is untrusted.
+   * These names are joined onto the meeting folder and then stat'd, handed to a
+   * spawned transcriber, and finally UNLINKED. A name that walks up out of the
+   * folder would turn "delete this meeting's audio" into "delete that file".
+   */
+  const planted = (mic) => segmentsOf({ segments: [{ index: 1, files: { mic, system: 'system.wav' } }] })[0].files.mic;
+
+  eq('a plain name is kept', planted('mic.wav'), 'mic.wav');
+  eq('and a resumed segment name', planted('mic-2.wav'), 'mic-2.wav');
+  eq('a relative escape is refused', planted('../../../../Windows/System32/drivers/etc/hosts'), null);
+  eq('a backslash escape is refused, this is Windows', planted('..\\..\\secret.wav'), null);
+  eq('an absolute Windows path is refused', planted('C:\\Windows\\System32\\config\\SAM'), null);
+  eq('a POSIX absolute path is refused', planted('/etc/passwd'), null);
+  eq('a subfolder is refused, the name must be bare', planted('sub/mic.wav'), null);
+  eq('a name that is not audio at all is refused', planted('meeting.json'), null);
+  eq('a non-string is refused', planted(42), null);
+  eq('null stays null', planted(null), null);
+  eq('the other track is checked too',
+    segmentsOf({ segments: [{ index: 1, files: { mic: 'mic.wav', system: '../../x.wav' } }] })[0].files.system, null);
+  // The synthesised schema-1 segment hardcodes its names, so it can never be
+  // aimed anywhere. Asserted rather than assumed.
+  eq('a schema-1 meeting still names its own files', segmentsOf(SCHEMA_1)[0].files,
+    { mic: 'mic.wav', system: 'system.wav' });
+}
+
 section('segmentsOf , a schema 1 meeting read as one segment');
 {
   const segs = segmentsOf(SCHEMA_1);

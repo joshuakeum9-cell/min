@@ -34,7 +34,7 @@ import { stripFillers as removeFillers } from './fillers.js';
 import {
   segmentsOf, pendingSegments, shiftResults, appendTranscript,
 } from './meeting-schema.js';
-import { meetingsDir } from './meetings-dir.js';
+import { meetingsDir, loadMeetingsDirFromSettings } from './meetings-dir.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Inside a packaged app this file lives in app.asar, but the worker is spawned by
@@ -345,6 +345,12 @@ async function transcribeSegment(dir, segment, ctx) {
   const present = [];
   for (const t of TRACKS) {
     const name = t.file === 'mic.wav' ? files.mic : files.system;
+    // segmentsOf refuses any name that is not a plain .wav, and returns null in
+    // its place. That matters here because this path is stat'd, handed to a
+    // spawned worker, and deleted after a successful transcript: a meeting.json
+    // copied in from elsewhere must not be able to aim any of those at a file
+    // outside the meeting folder.
+    if (!name) continue;
     const p = path.join(dir, name);
     const size = await fsp.stat(p).then((st) => st.size).catch(() => null);
     if (size == null || size <= 44) continue;
@@ -602,6 +608,10 @@ export async function transcribeMeeting(dir, opts = {}) {
 /* --------------------------------------------------------------------- main */
 
 if (isMain(import.meta.url)) {
+  // Run from a terminal, so nothing has published the meetings folder yet.
+  // Without this the tool reads ~/Meetings while the app writes somewhere the
+  // user chose, and reports an empty library that is not empty.
+  loadMeetingsDirFromSettings();
   const argv = process.argv.slice(2);
   const flags = new Set(argv.filter((a) => a.startsWith('--')));
   const target = argv.find((a) => !a.startsWith('--'));

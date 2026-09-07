@@ -2228,6 +2228,12 @@ ipcMain.handle('live-stop', async (_evt, dir, segmentIndex) => {
     let deleted = 0;
     if (complete && built.count) {
       for (const name of [files.mic, files.system]) {
+        // segmentsOf nulls any name that is not a plain .wav inside the folder,
+        // because meeting.json is a file the user can copy in from anywhere and
+        // this line is an unlink. Skipping explicitly rather than letting
+        // path.join throw into the catch, so a refused name is not mistaken for
+        // a locked file.
+        if (!name) continue;
         try {
           await fsp.rm(path.join(target, name), { force: true });
           deleted++;
