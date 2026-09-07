@@ -13,6 +13,7 @@ import path from 'node:path';
 import {
   ENV_KEY, defaultMeetingsDir, resolveMeetingsDir, meetingsDir, setMeetingsDir,
   whyNotUsable, settingsFilePath, meetingsDirFromSettingsText,
+  syncFolderCandidates, CLOUD_SUBFOLDER,
 } from './meetings-dir.js';
 
 let failures = 0;
@@ -78,6 +79,39 @@ section('refusing a folder before it is saved');
   ok('but not when the parent is missing too',
     /does not exist/.test(whyNotUsable(abs, { exists: false, parentExists: false }) ?? ''));
   ok('a relative path is refused', /full path/.test(whyNotUsable('Meetings', {}) ?? ''));
+}
+
+section('finding a folder some sync client already watches');
+{
+  const found = syncFolderCandidates({ home: 'C:\\Users\\A', env: {}, letters: ['G'] });
+  const paths = found.map((c) => c.path);
+  ok('Google Drive as a drive letter is looked for', paths.includes('G:\\My Drive'), JSON.stringify(paths));
+  ok('and as a folder in the home directory', paths.includes(path.join('C:\\Users\\A', 'My Drive')));
+  ok('OneDrive is looked for, since Windows ships with it', paths.some((p) => /OneDrive$/.test(p)));
+  ok('Dropbox too', paths.some((p) => /Dropbox$/.test(p)));
+  eq('every candidate is labelled for the person, not by path',
+    [...new Set(found.map((c) => c.name))].sort(),
+    ['Dropbox', 'Google Drive', 'OneDrive', 'iCloud Drive']);
+}
+{
+  // OneDrive exports its own variable; the home-directory guess must not then
+  // offer the same folder a second time.
+  const found = syncFolderCandidates({
+    home: 'C:\\Users\\A', env: { OneDrive: 'C:\\Users\\A\\OneDrive' }, letters: [],
+  });
+  const oneDrives = found.filter((c) => c.id === 'onedrive').map((c) => c.path);
+  eq('the same folder reached two ways is offered once', oneDrives, ['C:\\Users\\A\\OneDrive']);
+}
+{
+  const found = syncFolderCandidates({ home: 'C:\\Users\\A', env: {}, letters: ['G', 'H'] });
+  const google = found.filter((c) => c.id === 'google').map((c) => c.path);
+  eq('every drive letter given is checked, in order',
+    google.slice(0, 2), ['G:\\My Drive', 'H:\\My Drive']);
+  ok('and Google Drive is offered before OneDrive, being the one asked for',
+    found.findIndex((c) => c.id === 'google') < found.findIndex((c) => c.id === 'onedrive'));
+}
+{
+  eq('MIN takes one clearly named corner of a person\u0027s drive', CLOUD_SUBFOLDER, 'MIN Meetings');
 }
 
 section('finding MIN settings without Electron');

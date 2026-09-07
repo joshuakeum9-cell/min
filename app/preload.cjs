@@ -53,6 +53,9 @@ contextBridge.exposeInMainWorld('api', {
   // to run in main; the check runs there too because it stats the path.
   pickMeetingsDir: () => ipcRenderer.invoke('pick-meetings-dir'),
   checkMeetingsDir: (dir) => ipcRenderer.invoke('check-meetings-dir', dir),
+  // Cloud folders already on this hard drive, so meetings can be synced
+  // without MIN holding an account with anybody.
+  findSyncFolders: () => ipcRenderer.invoke('find-sync-folders'),
   setAlwaysOnTop: (on) => ipcRenderer.invoke('set-always-on-top', on),
   appVersion: () => ipcRenderer.invoke('app-version'),
 

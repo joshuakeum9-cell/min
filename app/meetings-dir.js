@@ -92,6 +92,55 @@ export function whyNotUsable(value, { exists, isDirectory, parentExists } = {}) 
 }
 
 /**
+ * The name MIN gives its own folder inside whichever cloud folder is chosen.
+ * A person's Drive is theirs, so MIN takes one clearly labelled corner of it
+ * rather than scattering meeting folders across the top level.
+ */
+export const CLOUD_SUBFOLDER = 'MIN Meetings';
+
+/**
+ * Where a sync client might already be keeping a folder on this hard drive.
+ *
+ * This is the whole trick behind syncing without an account: MIN never talks to
+ * Google, Microsoft or Dropbox. It writes files into a folder on the hard drive
+ * that one of their programs is already watching, and that program does the
+ * uploading. So all MIN has to do is find such a folder.
+ *
+ * Pure: it returns every path worth looking at, and the caller stats them. The
+ * candidates are ordered so the first one that exists is the one to offer.
+ *
+ * Google Drive for Desktop mounts as a drive letter with "My Drive" inside it
+ * (G:\My Drive on this machine), and can also be mounted as a folder in the
+ * home directory, so both shapes are checked. OneDrive exports its own
+ * environment variable on Windows and is present on essentially every Windows
+ * PC already, which makes it the one that needs no install at all.
+ */
+export function syncFolderCandidates({ home = os.homedir(), env = process.env, letters } = {}) {
+  const out = [];
+  const add = (id, name, p) => { if (p) out.push({ id, name, path: path.normalize(p) }); };
+
+  const drives = letters ?? 'DEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  for (const letter of drives) add('google', 'Google Drive', `${letter}:\\My Drive`);
+  add('google', 'Google Drive', path.join(home, 'My Drive'));
+
+  add('onedrive', 'OneDrive', env.OneDrive);
+  add('onedrive', 'OneDrive', env.OneDriveConsumer);
+  add('onedrive', 'OneDrive', path.join(home, 'OneDrive'));
+
+  add('dropbox', 'Dropbox', path.join(home, 'Dropbox'));
+  add('icloud', 'iCloud Drive', path.join(home, 'iCloudDrive'));
+
+  // Same folder reached two ways is one candidate, and the earlier one wins.
+  const seen = new Set();
+  return out.filter((c) => {
+    const key = c.path.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
  * Where MIN's settings file sits, for the processes that have no Electron `app`
  * to ask. The MCP server runs under plain node inside Claude Desktop, and it
  * has to find the same meetings the app is writing, or it answers questions

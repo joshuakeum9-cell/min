@@ -83,6 +83,8 @@ export function initSettings({ api }) {
   const dirEl = $('meetingsDirInput');
   const dirBrowse = $('meetingsDirBrowse');
   const dirResult = $('meetingsDirResult');
+  const syncField = $('syncField');
+  const syncChoices = $('syncChoices');
 
   // Feedback for the calendar group. Created beside the test button when the
   // markup has no slot for it, so the count and any error have somewhere to go.
@@ -187,6 +189,58 @@ export function initSettings({ api }) {
     }
   }
 
+  /**
+   * One row per cloud folder found on this hard drive.
+   *
+   * Rendered once, then only the "In use" marker is refreshed, because the set
+   * of installed sync programs does not change while the window is open but the
+   * chosen folder does.
+   */
+  let syncFound = [];
+  function renderSync() {
+    if (!syncChoices || !syncField) return;
+    if (!syncFound.length) { syncField.hidden = true; return; }
+    syncField.hidden = false;
+    syncChoices.replaceChildren();
+    const now = String(dirEl?.value ?? '').trim().toLowerCase();
+    for (const choice of syncFound) {
+      const row = document.createElement('div');
+      row.className = 'syncChoice';
+
+      const where = document.createElement('div');
+      where.className = 'where';
+      const who = document.createElement('div');
+      who.className = 'who';
+      who.textContent = choice.name;
+      const p = document.createElement('div');
+      p.className = 'path';
+      p.textContent = choice.meetingsPath;
+      where.append(who, p);
+
+      row.appendChild(where);
+      if (choice.meetingsPath.toLowerCase() === now) {
+        const using = document.createElement('span');
+        using.className = 'using';
+        using.textContent = 'In use';
+        row.appendChild(using);
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'btn sm';
+        btn.type = 'button';
+        btn.textContent = `Use ${choice.name}`;
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          if (dirEl) dirEl.value = choice.meetingsPath;
+          await saveDir(choice.meetingsPath);
+          btn.disabled = false;
+          renderSync();
+        });
+        row.appendChild(btn);
+      }
+      syncChoices.appendChild(row);
+    }
+  }
+
   /** Feedback for the folder field, kept separate from the calendar's line. */
   function dirNote(text, kind = '') {
     if (!dirResult) return;
@@ -217,8 +271,17 @@ export function initSettings({ api }) {
     if (!(await save({ meetingsDir: value }))) return false;
     if (dirEl) dirEl.value = verdict.dir;
     dirNote(verdict.exists === false ? 'Saved. The folder will be created.' : 'Saved.', 'good');
+    renderSync();
     return true;
   }
+
+  // Which sync programs are installed cannot change while this window is open,
+  // so this runs once. A failure here hides the section rather than breaking
+  // the pane: choosing a folder by hand still works.
+  api.findSyncFolders?.().then((found) => {
+    syncFound = Array.isArray(found) ? found : [];
+    renderSync();
+  }).catch(() => { if (syncField) syncField.hidden = true; });
 
   /** Save one patch and re-render from what the main process kept. */
   async function save(patch) {

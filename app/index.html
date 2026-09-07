@@ -798,6 +798,15 @@
   .mutedApp { display:flex; align-items:center; gap:10px; padding:4px 0; }
   .mutedApp + .mutedApp { border-top:1px solid var(--hairline); }
   .mutedApp .name { flex:1; min-width:0; font:400 var(--fs-sm)/var(--lh-body) var(--sans); color:var(--ink-2); overflow-wrap:anywhere; }
+  /* Settings > Where meetings are kept: one row per cloud folder found on this
+     hard drive. The path wraps rather than overflows, because a mount point can
+     be long, and the button keeps one right edge whatever the path's length. */
+  .syncChoices { display:flex; flex-direction:column; gap:8px; }
+  .syncChoice { display:flex; align-items:center; gap:10px; }
+  .syncChoice .where { flex:1; min-width:0; }
+  .syncChoice .who { font:500 var(--fs-sm)/var(--lh-ctl) var(--sans); color:var(--ink); }
+  .syncChoice .path { font:400 var(--fs-xs)/var(--lh-body) var(--mono); color:var(--ink-3); overflow-wrap:anywhere; }
+  .syncChoice .using { font:400 var(--fs-xs)/var(--lh-ctl) var(--sans); color:var(--accent-ink); white-space:nowrap; }
   .kv { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px; padding:8px 0; align-items:baseline; }
   .kv + .kv { border-top:1px solid var(--hairline); }
   .kv .k { font:400 var(--fs-sm)/var(--lh-body) var(--sans); color:var(--ink-3); }
@@ -981,7 +990,12 @@
               <button id="meetingsDirBrowse" class="btn sm">Browse</button>
               <span id="meetingsDirResult" class="result"></span>
             </div>
-            <p class="help">Point this at a folder your cloud already syncs, such as <b>Google Drive</b>, and every meeting is in that cloud and on your phone, and ChatGPT or Claude can read it through their Drive connector. MIN itself never signs in to anything: the sync app you already run does that job. Changing this <b>moves nothing</b>, so meetings already saved stay where they are.</p>
+            <p class="help">Changing this <b>moves nothing</b>. Meetings already saved stay where they are, and new ones go here.</p>
+          </div>
+          <div class="field" id="syncField" hidden>
+            <label>Keep them in a cloud you already use</label>
+            <div id="syncChoices" class="syncChoices"></div>
+            <p class="help">One click puts your meetings in a folder that program already syncs, so they reach your other computers and your phone by themselves, and ChatGPT or Claude can read them through their own Google Drive connector. <b>MIN never signs in to anything.</b> It writes files to this hard drive, and the sync program you already run does the uploading.</p>
           </div>
         </section>
 

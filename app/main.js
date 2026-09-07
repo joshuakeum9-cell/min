@@ -35,7 +35,9 @@ import { parseMicUse, pendingDetections, sessionId, labelFor } from './mic-watch
 // here would evaluate m0/lib/models.js before the MIN_MODELS_DIR line below
 // runs, and a packaged build would then look for its models inside the asar.
 import { samplesFromIpc } from './ipc-samples.js';
-import { meetingsDir, setMeetingsDir, whyNotUsable } from './meetings-dir.js';
+import {
+  meetingsDir, setMeetingsDir, whyNotUsable, syncFolderCandidates, CLOUD_SUBFOLDER,
+} from './meetings-dir.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // A function, not a constant. The folder is a setting, and a constant here
@@ -1184,6 +1186,28 @@ ipcMain.handle('check-meetings-dir', async (_evt, value) => {
   }
   const reason = whyNotUsable(full, { exists, isDirectory, parentExists });
   return { ok: !reason, dir: full, reason, exists };
+});
+
+/**
+ * Which cloud folders are already on this hard drive.
+ *
+ * This is how MIN syncs without an account. It never talks to Google,
+ * Microsoft or Dropbox: it finds a folder one of their programs is already
+ * watching, writes meetings into it, and lets that program do the uploading.
+ * So the whole feature is a stat over a list of well-known paths.
+ *
+ * Returns them in the order they are worth offering, each with the exact
+ * subfolder MIN would use, so the settings pane can offer a single button.
+ */
+ipcMain.handle('find-sync-folders', async () => {
+  const found = [];
+  for (const candidate of syncFolderCandidates()) {
+    // A cloud folder can be a placeholder that is not downloaded; stat still
+    // answers, which is all we need, and we never read its contents here.
+    const ok = await fsp.stat(candidate.path).then((s) => s.isDirectory()).catch(() => false);
+    if (ok) found.push({ ...candidate, meetingsPath: path.join(candidate.path, CLOUD_SUBFOLDER) });
+  }
+  return found;
 });
 
 ipcMain.handle('set-always-on-top', (_evt, on) => {
