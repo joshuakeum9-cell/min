@@ -37,6 +37,17 @@ const OFFSET_BOUND_MS = 26 * 3600000;
 const MAX_OCCURRENCES = 500;
 
 /**
+ * Occurrences produced by a whole FEED, across every event in it.
+ *
+ * The per-event ceiling above says nothing about how many events there are, and
+ * the 4 MB download ceiling admits tens of thousands of small ones. Their
+ * product is what a hostile or simply enormous calendar can cost this process,
+ * and this is the number that bounds it. Ten thousand is far past any real
+ * agenda: a year of six meetings every weekday is about fifteen hundred.
+ */
+const MAX_TOTAL_OCCURRENCES = 10000;
+
+/**
  * Periods walked while looking for those occurrences. A rule can legitimately
  * skip periods (FREQ=MONTHLY;BYMONTHDAY=31 misses five months a year), so the
  * period budget has to be much larger than the occurrence budget. 20,000 days is
@@ -743,9 +754,25 @@ export function expandAll(events, rangeStart, rangeEnd) {
     if (!ev) continue;
     if (ev.recurrenceId && mastersWithRule.has(ev.uid)) continue;
     for (const occ of expandRecurring(ev, rangeStart, rangeEnd)) out.push(occ);
+    /*
+     * A ceiling on the WHOLE expansion, not just on one event's recurrences.
+     *
+     * MAX_OCCURRENCES bounds a single event and MAX_FEED_BYTES bounds the
+     * download, but nothing bounded their product. A 4 MB feed holds tens of
+     * thousands of small VEVENTs, and each may legitimately expand to 500
+     * occurrences, so a remote server that controls the feed could make the
+     * main process build millions of objects: a freeze and an out-of-memory
+     * rather than a parse error, in the one part of this app whose input comes
+     * from somewhere else entirely.
+     *
+     * Stopping rather than refusing: an agenda showing the first ten thousand
+     * occurrences is still a working agenda, and someone whose calendar really
+     * is that large should not lose the feature over it.
+     */
+    if (out.length >= MAX_TOTAL_OCCURRENCES) break;
   }
   out.sort((a, b) => a.start - b.start);
-  return out;
+  return out.length > MAX_TOTAL_OCCURRENCES ? out.slice(0, MAX_TOTAL_OCCURRENCES) : out;
 }
 
 /* ------------------------------------------------------------------ agenda */

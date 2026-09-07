@@ -216,7 +216,7 @@
   <div class="wrap">
     <p class="eyebrow">Local-first meeting notes · Windows</p>
     <h1>Your meetings never leave your&nbsp;<em>machine</em>.</h1>
-    <p class="lede">MIN records both sides of a call without a bot joining, transcribes it on your own computer as the meeting happens, and turns the notes you typed into a clean write-up. No account. No API key. No subscription to this. After the one-time model download, recording and transcription never touch the network, and your notes are never uploaded.</p>
+    <p class="lede">MIN records both sides of a call without a bot joining, transcribes it on your own computer as the meeting happens, and turns the notes you typed into a clean write-up. No account. No API key. No subscription to this. After the one-time model download, recording and transcription never touch the network. MIN itself uploads nothing and has no account anywhere; point it at a folder your cloud already syncs and your meetings reach your other computers, because that program does the uploading.</p>
     <div class="cta-row">
       <a class="btn light" href="#download">Download for Windows</a>
       <a class="btn ghost" href="#how">See how it works</a>
@@ -341,7 +341,7 @@
           <tr><td>Where things live</td><td>Meetings are markdown in a folder you own. Models, the search index, the MCP index, your settings and the cached calendar sit in <code>%APPDATA%\MIN</code>, plaintext and searchable. Uninstalling deliberately removes neither, so notes are never destroyed on the way out</td></tr>
           <tr><td>Live transcript</td><td>Written as the meeting runs, from the two tracks, with no diarization model. Lines appear when a speaker pauses, so a short remark lands a second or two behind and a single utterance is capped at 20 seconds. It can be switched off, and then the transcript is written after you stop</td></tr>
           <tr><td>Calendar</td><td>Optional. One secret iCal address, pasted in Settings, fetched over HTTPS every 5 to 60 minutes. No sign-in, no OAuth, no account. The next 14 days appear on the home screen, five meetings at a time, and a note opened from one of them takes its title and attendees</td></tr>
-          <tr><td>Network use</td><td>Two things, both your choice: fetching the calendar address you pasted, and sending a write-up out. Nothing else, once the models are downloaded. Notes and transcripts are never uploaded</td></tr>
+          <tr><td>Network use</td><td>Three things, all your choice: fetching the calendar address you pasted, sending a write-up out, and, if you point the meetings folder at one your cloud syncs, that program uploading it. MIN holds no account and uploads nothing itself</td></tr>
           <tr><td>Requirements</td><td>Windows 10 or 11, 64-bit. Transcription uses the CPU backend, so no graphics card is needed</td></tr>
           <tr><td>Licence</td><td>MIT. Speech models are CC-BY-4.0 and MIT, fetched at runtime</td></tr>
         </tbody>

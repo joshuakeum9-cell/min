@@ -16,7 +16,6 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, screen, session, desktopCapturer, ipcMain, shell, clipboard, powerSaveBlocker, dialog } from 'electron';
 import { execFile as execFileCp } from 'node:child_process';
 import path from 'node:path';
-import os from 'node:os';
 import fsp from 'node:fs/promises';
 // Sync, and only for the live-transcript log: it is written from inside a
 // child-process event handler during a recording, where an unawaited promise

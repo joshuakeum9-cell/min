@@ -24,7 +24,6 @@
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +31,7 @@ import { ensureModel, llmPath } from '../m0/lib/models.js';
 import { detectHardware, isMain } from '../m0/lib/hardware.js';
 import { stripFillers as removeFillers } from './fillers.js';
 import {
-  segmentsOf, pendingSegments, shiftResults, appendTranscript,
+  segmentsOf, pendingSegments, pendingOf, shiftResults, appendTranscript,
 } from './meeting-schema.js';
 import { meetingsDir, loadMeetingsDirFromSettings } from './meetings-dir.js';
 
@@ -450,7 +449,12 @@ export async function transcribeMeeting(dir, opts = {}) {
    * lines that are already in the file.
    */
   const all = segmentsOf(meta);
-  const todo = pendingSegments(meta);
+  // Filtered from `all`, never read again from `meta`. The loop below mutates
+  // each segment it finishes and `meta.segments = all` is what reaches disk, so
+  // the two lists have to be the same objects. Calling pendingSegments(meta)
+  // here built a second, unrelated set, and every "this part is transcribed"
+  // record was written onto copies that were then thrown away.
+  const todo = pendingOf(all);
   log(`\n> ${path.basename(dir)}${all.length > 1 ? `  (${todo.length} of ${all.length} parts)` : ''}`);
 
   const ctx = { modelDir, vadModel, threads, quiet, log, opts };

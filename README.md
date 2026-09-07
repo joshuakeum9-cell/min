@@ -5,12 +5,18 @@ bot joining, transcribes on your own CPU, and writes plain markdown into a folde
 own. No account, no API key, no subscription to this. First run downloads 642 MiB of
 speech models; after that, recording and transcription work offline.
 
-Two things do use the network, and both are your choice. The write-up hands your
+Three things can use the network, and all three are your choice. The write-up hands your
 transcript and your typed notes to an assistant you already pay for, by clipboard or by a
-Claude Desktop extension. And if you connect a calendar, MIN fetches that one address on a
+Claude Desktop extension. If you connect a calendar, MIN fetches that one address on a
 timer so your upcoming meetings appear on Home and a note opened from one of them is
-named after it. Nothing else is sent anywhere, and your notes and transcripts are never
-uploaded.
+named after it. And if you point the meetings folder at one your cloud already syncs, your
+meetings go to that cloud and reach your other computers.
+
+That third one deserves a plain sentence, because it is the difference between this app
+and the ones it replaces. **MIN itself uploads nothing and has no account anywhere.** It
+writes files to a folder on your hard drive. If that folder happens to be one Google Drive
+or OneDrive is watching, their program does the uploading, on your account, because you
+asked it to. Leave the folder where it is and nothing of yours leaves the machine at all.
 
 > **Measured:** throughput, the hard chunk ceiling, loopback continuity through silence,
 > speech memory. All of it on one machine, the developer's desktop, which every

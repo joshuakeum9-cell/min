@@ -18,7 +18,6 @@
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { segmentsOf, pendingSegments } from './meeting-schema.js';
 import { meetingsDir } from './meetings-dir.js';

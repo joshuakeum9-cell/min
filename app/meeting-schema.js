@@ -195,9 +195,27 @@ export function segmentsOf(meta) {
   }];
 }
 
+/**
+ * Segments still owed a transcript, from a list already read.
+ *
+ * Separate from pendingSegments because segmentsOf now returns FRESH objects,
+ * having to rebuild each segment to drop an unsafe file name. A caller that
+ * read the segments and then called pendingSegments(meta) got a second,
+ * unrelated set of objects: transcribe.js mutates the pending ones and writes
+ * the first set back, so its record of "this part was transcribed" landed on
+ * copies nobody saved, while the audio it had just deleted was gone. Filtering
+ * the caller's own list keeps the two aliased, as they were before the names
+ * were sanitised.
+ */
+export function pendingOf(segments) {
+  return (Array.isArray(segments) ? segments : []).filter(
+    (s) => !isObj(s?.transcript) || s.transcript.complete !== true
+  );
+}
+
 /** Segments still owed a transcript. Missing counts, and so does incomplete. */
 export function pendingSegments(meta) {
-  return segmentsOf(meta).filter((s) => !isObj(s.transcript) || s.transcript.complete !== true);
+  return pendingOf(segmentsOf(meta));
 }
 
 /* ------------------------------------------------------------------ writing */

@@ -25,7 +25,6 @@
 
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { isMain } from '../m0/lib/hardware.js';
 import { meetingsDir, loadMeetingsDirFromSettings } from './meetings-dir.js';

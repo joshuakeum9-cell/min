@@ -21,6 +21,7 @@ import {
   eventAt,
   fetchCalendar,
   sanitiseTitle,
+  expandAll,
   _internals,
 } from './calendar.js';
 
@@ -842,6 +843,42 @@ eq('a unique-local IPv6 address is refused', _internals.isPrivateHost('fd00::1')
 eq('an IPv4-mapped loopback is refused', _internals.isPrivateHost('::ffff:127.0.0.1'), true);
 eq('a malformed dotted quad is refused', _internals.isPrivateHost('999.1.1.1'), true);
 eq('an empty host is refused', _internals.isPrivateHost(''), true);
+
+section('a feed cannot make the app build unbounded occurrences');
+{
+  /*
+   * The per-event ceiling is 500 occurrences and the download ceiling is 4 MB.
+   * Neither bounds their PRODUCT, and the feed comes from a server the user
+   * does not control. Four thousand daily events, each entitled to its 500,
+   * is two million objects built in the main process: a freeze and an
+   * out-of-memory, not a parse error.
+   *
+   * Half a megabyte of feed here, well inside what the fetcher accepts.
+   */
+  const events = [];
+  for (let i = 0; i < 4000; i++) {
+    events.push([
+      'BEGIN:VEVENT',
+      `UID:bomb-${i}@example.com`,
+      'DTSTART:20260101T090000Z',
+      'DTEND:20260101T093000Z',
+      'RRULE:FREQ=DAILY;COUNT=500',
+      `SUMMARY:Event ${i}`,
+      'END:VEVENT',
+    ].join('\r\n'));
+  }
+  const feed = ['BEGIN:VCALENDAR', 'VERSION:2.0', ...events, 'END:VCALENDAR'].join('\r\n');
+
+  const started = Date.now();
+  const parsed = parseICS(feed);
+  const occ = expandAll(parsed, new Date('2026-01-01T00:00:00Z'), new Date('2030-01-01T00:00:00Z'));
+  const ms = Date.now() - started;
+
+  eq('every event still parses', parsed.length, 4000);
+  ok('but the expansion is capped', occ.length <= 10000, `${occ.length} occurrences`);
+  ok('and it finishes quickly rather than hanging', ms < 10000, `${ms} ms`);
+  ok('what comes back is still sorted', occ.every((o, i) => i === 0 || o.start >= occ[i - 1].start));
+}
 
 /* ------------------------------------------------------------------ result */
 

@@ -198,7 +198,7 @@ section('folder name');
 section('meeting.json');
 {
   const meta = meetingRecord(
-    { title: 'Wells Fargo', startedAt: '2026-08-13T18:00:00.000Z', participants: ['a@b.com', ' ', 'c@d.com'], meetingId: 'abc' },
+    { title: 'Quarterly Review', startedAt: '2026-08-13T18:00:00.000Z', participants: ['a@b.com', ' ', 'c@d.com'], meetingId: 'abc' },
     { seconds: 120, count: 4, importedAt: '2026-09-07T12:00:00.000Z' }
   );
   eq('schema 2', meta.schema, 2);

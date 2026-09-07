@@ -23,8 +23,13 @@
  * has always been. One setting buys the whole feature, and the app never has
  * to know which of those is happening.
  *
- * Pure except for reading `process.env` and `os.homedir()`, and every rule is
- * under test in meetings-dir.test.js.
+ * Every rule here is under test in meetings-dir.test.js. All of it is pure
+ * except `process.env`, `os.homedir()`, and `loadMeetingsDirFromSettings`,
+ * which is the one function that reads a file: the command-line tools and the
+ * MCP server have no Electron `app` to ask, so they read the settings file
+ * themselves, and a helper here is better than each of them rolling its own.
+ * Keep new code on the pure side of that line, so the renderer-safe half of
+ * this file stays testable with nothing on disk.
  */
 
 import path from 'node:path';

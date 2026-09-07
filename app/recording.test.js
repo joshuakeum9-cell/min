@@ -19,6 +19,7 @@
 import {
   segmentsOf,
   pendingSegments,
+  pendingOf,
   nextSegment,
   withSegment,
   offsetSamples,
@@ -267,6 +268,46 @@ eq('a segments array of junk is not back-filled either', segmentsOf({ ...SCHEMA_
 eq('an unparseable startedAt still yields the segment', segmentsOf({ startedAt: 'sometime tuesday' }).length, 1);
 eq('and its duration floors at zero rather than going NaN', segmentsOf({ startedAt: 'sometime tuesday' })[0].durationSeconds, 0);
 eq('an endedAt before startedAt cannot make a negative duration', segmentsOf({ startedAt: T(15, 10), endedAt: T(15, 0) })[0].durationSeconds, 0);
+
+section('pendingOf , the pending list must BE the segments the caller holds');
+{
+  /*
+   * transcribe.js reads the segments once, transcribes the pending ones,
+   * mutates each as it finishes, and writes the FIRST list back to
+   * meeting.json. That only records anything if the two lists are the same
+   * objects.
+   *
+   * They stopped being the same the moment segmentsOf began rebuilding each
+   * segment to drop an unsafe file name: calling segmentsOf and then
+   * pendingSegments(meta) produced two unrelated sets, so every "this part was
+   * transcribed" landed on copies nobody saved, while the audio the run had
+   * just deleted was gone for good. This is that bug, pinned.
+   */
+  const meta = {
+    schema: 2,
+    segments: [
+      { index: 1, files: { mic: 'mic.wav', system: 'system.wav' }, transcript: { complete: true } },
+      { index: 2, files: { mic: 'mic-2.wav', system: 'system-2.wav' } },
+    ],
+  };
+  const all = segmentsOf(meta);
+  const todo = pendingOf(all);
+  eq('only the untranscribed part is pending', todo.map((s) => s.index), [2]);
+  ok('and it is the very same object, not a copy', todo[0] === all[1]);
+
+  // What transcribe.js does: mutate the pending one, then write `all` back.
+  todo[0].transcript = { complete: true, count: 7 };
+  todo[0].audio = 'deleted after successful transcription';
+  eq('so a finished part is recorded in the list that gets saved',
+    all[1].transcript, { complete: true, count: 7 });
+  eq('including what became of its audio', all[1].audio, 'deleted after successful transcription');
+  eq('and the meeting now reads as fully transcribed',
+    all.every((s) => s.transcript?.complete === true), true);
+
+  ok('a second read is still a fresh copy, which is why the above matters',
+    segmentsOf(meta)[1] !== all[1]);
+  eq('pendingOf tolerates junk', [pendingOf(null).length, pendingOf(undefined).length, pendingOf([{}]).length], [0, 0, 1]);
+}
 
 section('pendingSegments , what is still owed a transcript');
 eq('a fresh schema 1 meeting owes one', pendingSegments(SCHEMA_1).length, 1);
