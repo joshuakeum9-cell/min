@@ -115,7 +115,7 @@ SUMMARY:OPS-200 Operations Strategy, a title long enough that Google fol
 TRANSP:OPAQUE
 ORGANIZER;CN=Registrar:mailto:registrar@example.edu
 ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Sam
-  Keum;X-NUM-GUESTS=0:mailto:you@example.com
+  Rivera;X-NUM-GUESTS=0:mailto:you@example.com
 ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;CN="Sm
  ith: Jane";X-NUM-GUESTS=0:mailto:jane.smith@example.edu
 BEGIN:VALARM
