@@ -36,8 +36,13 @@ import { stdin, stdout } from 'node:process';
 import { detectHardware, isMain } from './lib/hardware.js';
 import { ensureModel, llmPath } from './lib/models.js';
 import { RESULTS_DIR, saveResult } from './lib/report.js';
+import { fileURLToPath } from 'node:url';
 
-const FIXTURES = path.resolve('fixtures/meetings');
+// Anchored to the repository rather than the working directory, so the gate
+// looks in the same place whichever folder it is started from.
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+const FIXTURES = path.join(REPO, 'fixtures', 'meetings');
 const PASS_RATIO = 0.7; // 7 of 10
 
 const SYSTEM = `You enhance a person's own meeting notes using the transcript.

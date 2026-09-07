@@ -182,7 +182,11 @@ async function main() {
    * exactly that hole.
    */
   if (process.platform === 'win32') {
-    const bsdtar = path.join(process.env.SystemRoot ?? 'C:\Windows', 'System32', 'tar.exe');
+    // 'C:\\Windows', not 'C:\Windows': \W is not an escape sequence, so the
+    // single-backslash form silently becomes "C:Windows" and the fallback
+    // pointed at a path that cannot exist. Only reachable on a machine with no
+    // SystemRoot in its environment, which is why it went unnoticed here.
+    const bsdtar = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
     // Named entries rather than '.', so the archive holds manifest.json at its
     // root the way the reader expects, with no './' in front of every path.
     // --format zip, never -a: -a guesses from the extension, and .mcpb is not a

@@ -119,7 +119,7 @@ if (isMain(import.meta.url)) {
     outstanding: ['capture-integrity', 'counterfactual-gate'],
   });
 
-  const fixtures = await fsp.readdir('fixtures/meetings').catch(() => []);
+  const fixtures = await fsp.readdir(path.join(HERE, '..', 'fixtures', 'meetings')).catch(() => []);
   if (fixtures.length < 10) {
     line(`fixtures/meetings has ${fixtures.length} meeting(s). The gate wants 10 real ones.`);
     line();

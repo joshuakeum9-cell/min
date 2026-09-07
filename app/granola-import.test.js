@@ -1,9 +1,10 @@
 /**
  * MIN · Granola import tests. Run: node app/granola-import.test.js
  *
- * No framework, like the other suites. The fixture is the real shape: the
- * opening of an actual Granola export from this account, leading space and
- * two-space turn separators included.
+ * No framework, like the other suites. The fixture reproduces the SHAPE of a
+ * Granola export exactly, leading space and two-space turn separators included,
+ * with invented words. Real meeting content and real participants have no place
+ * in a public repository.
  *
  * The test that matters most is the round trip. It parses the transcript.md
  * this module writes with MIN's OWN reader, `segmentsFromTranscript` from
@@ -32,7 +33,9 @@ function eq(label, got, want) {
 }
 const section = (t) => console.log(`\n${t}`);
 
-// Verbatim from the Granola MCP, first four turns of "Quarterly Planning Review".
+// The exact shape a Granola export has: one leading space, two spaces between
+// turns, and speaker labels inline. The words are invented; the shape is not,
+// and the shape is what the parser has to cope with.
 const REAL = ' Them: Hello.  Me: Hi, can you hear me?  Them: Morning, how are you?  Me: I\'m doing good. How are you doing?';
 
 section('parsing a Granola transcript');

@@ -21,6 +21,12 @@ import { createRequire } from 'node:module';
 import { detectHardware, describe, validateTestBed, isMain } from './lib/hardware.js';
 import { ensureModel, parakeetPaths } from './lib/models.js';
 import { saveResult } from './lib/report.js';
+import { fileURLToPath } from 'node:url';
+
+// The repository, not the working directory. A bare path.resolve('fixtures')
+// resolves against process.cwd(), so it found the right folder only when the
+// command happened to be run from the repo root.
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const require = createRequire(import.meta.url);
 
@@ -193,7 +199,7 @@ if (isMain(import.meta.url)) {
     wav = await pickWav(baseDir, null);
   }
   if (args.synth > 0) {
-    const outPath = path.resolve('fixtures', `synth-${args.synth}min.wav`);
+    const outPath = path.join(REPO, 'fixtures', `synth-${args.synth}min.wav`);
     const exists = await fsp.stat(outPath).then(() => true).catch(() => false);
     if (!exists) {
       console.log(`Building a ${args.synth}-minute clip by tiling ${path.basename(wav)}…`);
