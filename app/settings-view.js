@@ -80,6 +80,9 @@ export function initSettings({ api }) {
   const mutedEl = $('micDetectMuted');
   const providerSel = $('defaultProvider');
   const openDirBtn = $('openMeetingsDir');
+  const dirEl = $('meetingsDirInput');
+  const dirBrowse = $('meetingsDirBrowse');
+  const dirResult = $('meetingsDirResult');
 
   // Feedback for the calendar group. Created beside the test button when the
   // markup has no slot for it, so the count and any error have somewhere to go.
@@ -174,6 +177,47 @@ export function initSettings({ api }) {
       const id = current.provider ?? '';
       providerSel.value = PROVIDERS.some((p) => p.id === id) ? id : '';
     }
+    // The box shows the folder actually in use, never a blank. Blank in the
+    // settings file means "the default", and showing that as an empty field
+    // would leave the user with no idea where their meetings are.
+    if (dirEl && document.activeElement !== dirEl) {
+      const set = String(current.meetingsDir ?? '').trim();
+      if (set) dirEl.value = set;
+      else api.meetingsDir?.().then((d) => { if (d && !dirEl.value) dirEl.value = d; }).catch(() => {});
+    }
+  }
+
+  /** Feedback for the folder field, kept separate from the calendar's line. */
+  function dirNote(text, kind = '') {
+    if (!dirResult) return;
+    dirResult.textContent = text;
+    dirResult.className = `result${kind ? ' ' + kind : ''}`;
+  }
+
+  /**
+   * Save a chosen folder, but only after main has checked it.
+   *
+   * Checked first on purpose: pointing MIN at a file, or at a path whose parent
+   * does not exist, would empty every list and read exactly like "MIN lost my
+   * meetings". A sentence now is far better than that later.
+   */
+  async function saveDir(raw) {
+    const value = String(raw ?? '').trim();
+    let verdict;
+    try {
+      verdict = await api.checkMeetingsDir(value);
+    } catch (e) {
+      dirNote('Could not check that folder: ' + e.message, 'warn');
+      return false;
+    }
+    if (!verdict?.ok) {
+      dirNote(verdict?.reason ?? 'That folder cannot be used.', 'warn');
+      return false;
+    }
+    if (!(await save({ meetingsDir: value }))) return false;
+    if (dirEl) dirEl.value = verdict.dir;
+    dirNote(verdict.exists === false ? 'Saved. The folder will be created.' : 'Saved.', 'good');
+    return true;
   }
 
   /** Save one patch and re-render from what the main process kept. */
@@ -186,6 +230,23 @@ export function initSettings({ api }) {
       return false;
     }
   }
+
+  // Same rule as the calendar address: save on change, not per keystroke. A
+  // half-typed path would be checked and refused while it is still being typed.
+  dirEl?.addEventListener('change', () => { saveDir(dirEl.value); });
+
+  dirBrowse?.addEventListener('click', async () => {
+    let picked;
+    try {
+      picked = await api.pickMeetingsDir();
+    } catch (e) {
+      dirNote('Could not open the folder picker: ' + e.message, 'warn');
+      return;
+    }
+    if (!picked) return;          // cancelled, which is not a failure
+    if (dirEl) dirEl.value = picked;
+    await saveDir(picked);
+  });
 
   // The address saves on change (blur or Enter), not on every keystroke: a
   // half-pasted URL would otherwise be fetched and fail before it is complete.

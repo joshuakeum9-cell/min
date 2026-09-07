@@ -21,8 +21,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { segmentsOf, pendingSegments } from './meeting-schema.js';
+import { meetingsDir } from './meetings-dir.js';
 
-export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
+// Re-exported so every reader of the library has one import for it. It is a
+// function, not a constant: the folder is a setting now, and a constant would
+// bake in the default at import time, before main has read the settings file.
+export { meetingsDir };
 
 /* ------------------------------------------------------------------ reading */
 
@@ -195,10 +199,11 @@ function calendarFields(meta) {
 }
 
 async function meetingDirs() {
-  const entries = await fsp.readdir(MEETINGS_DIR, { withFileTypes: true }).catch(() => []);
+  const root = meetingsDir();
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
   return entries
     .filter((e) => e.isDirectory())
-    .map((e) => path.join(MEETINGS_DIR, e.name))
+    .map((e) => path.join(root, e.name))
     .sort()
     .reverse(); // newest first, the one you want is almost always the last one
 }

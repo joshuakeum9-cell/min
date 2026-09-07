@@ -55,6 +55,14 @@ export const DEFAULTS = Object.freeze({
   // keys joined by ';'. A string so it rides the typeof allow-list like
   // indicatorPosition does; main and the settings pane split it.
   micDetectMuted: '',
+  // Where meeting folders are written. Empty means the default, ~/Meetings.
+  //
+  // Point it at a folder a sync client already watches (Google Drive for
+  // Desktop, OneDrive, Dropbox, iCloud) and every meeting is in that cloud
+  // without this app holding an account, a token, or a line of upload code.
+  // Changing it never moves anything: it points at a folder, and meetings
+  // already written stay where they are.
+  meetingsDir: '',
 });
 
 // Only these keys are ever read from disk or accepted from the renderer. A

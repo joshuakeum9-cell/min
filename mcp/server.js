@@ -28,12 +28,25 @@
  */
 
 import fsp from 'node:fs/promises';
+import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { listMeetings, readMeeting, search, reindex, MEETINGS_DIR } from '../app/library.js';
+import { listMeetings, readMeeting, search, reindex, meetingsDir } from '../app/library.js';
+import { setMeetingsDir, meetingsDirFromSettingsText, settingsFilePath } from '../app/meetings-dir.js';
+
+/*
+ * This server runs under plain node inside Claude Desktop, with no Electron
+ * `app` to ask and no environment from MIN. If the user has pointed MIN at
+ * another folder (a synced Drive folder, say), reading the default would have
+ * it answering questions about an empty directory while the real one fills up.
+ * So it reads MIN's own settings file, the same way MIN does.
+ */
+try {
+  setMeetingsDir(meetingsDirFromSettingsText(fs.readFileSync(settingsFilePath(), 'utf8')));
+} catch { /* no settings file yet: the default is the right answer */ }
 
 /**
  * Where Electron puts userData for this app, worked out without Electron: this
@@ -80,7 +93,7 @@ const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
  * This is a name test only, it does not follow links. Anything about to be
  * written goes through writableInMeetings below, which does.
  */
-function insideMeetings(target, root = MEETINGS_DIR) {
+function insideMeetings(target, root = meetingsDir()) {
   const r = fold(path.resolve(root));
   const t = fold(path.resolve(target));
   return t === r || t.startsWith(r.endsWith(path.sep) ? r : r + path.sep);
@@ -107,25 +120,25 @@ async function writableInMeetings(target) {
     const dir = await fsp.realpath(path.dirname(target)).catch(() => path.dirname(target));
     return path.join(dir, path.basename(target));
   });
-  const root = await fsp.realpath(MEETINGS_DIR).catch(() => MEETINGS_DIR);
+  const root = await fsp.realpath(meetingsDir()).catch(() => meetingsDir());
   if (!insideMeetings(real, root)) {
     throw new Error(
-      `Refusing to write ${path.basename(target)}: it resolves outside ${MEETINGS_DIR}.`
+      `Refusing to write ${path.basename(target)}: it resolves outside ${meetingsDir()}.`
     );
   }
   return real;
 }
 
-/** Resolve a meeting the caller named, and refuse anything outside MEETINGS_DIR. */
+/** Resolve a meeting the caller named, and refuse anything outside the folder. */
 async function findMeeting(idOrTitle) {
   const m = await matchMeeting(idOrTitle);
   // Nothing reachable today fails this: every id is a directory name read out of
-  // MEETINGS_DIR, so a caller passing "../../etc" simply matches nothing. It is
+  // the meetings folder, so a caller passing "../../etc" matches nothing. It is
   // the choke point every path-taking tool goes through, so it stays, and a
   // later change that does join caller input onto a path cannot silently turn
   // these five tools into a read and write primitive for the whole disk.
   if (!insideMeetings(m.dir)) {
-    throw new Error(`Refusing "${idOrTitle}": it resolves outside ${MEETINGS_DIR}.`);
+    throw new Error(`Refusing "${idOrTitle}": it resolves outside ${meetingsDir()}.`);
   }
   return m;
 }
@@ -133,7 +146,7 @@ async function findMeeting(idOrTitle) {
 /** Match by exact folder name first, then by a fuzzy match on the title. */
 async function matchMeeting(idOrTitle) {
   const all = await listMeetings();
-  if (!all.length) throw new Error(`No meetings found in ${MEETINGS_DIR}.`);
+  if (!all.length) throw new Error(`No meetings found in ${meetingsDir()}.`);
 
   const needle = idOrTitle.trim().toLowerCase();
   const exact = all.find((m) => m.id.toLowerCase() === needle);
@@ -174,7 +187,7 @@ server.registerTool(
   },
   async ({ limit }) => {
     const all = await listMeetings();
-    if (!all.length) return text(`No meetings yet. They are recorded into ${MEETINGS_DIR}.`);
+    if (!all.length) return text(`No meetings yet. They are recorded into ${meetingsDir()}.`);
 
     const rows = all.slice(0, limit).map((m) => {
       const state = m.recording
@@ -188,7 +201,7 @@ server.registerTool(
       const typed = m.notes.trim() ? `${m.notes.trim().split(/\s+/).length} words of notes` : 'no notes typed';
       return `- ${m.id}\n    "${m.title}" · ${fmtDate(m.startedAt)} · ${length} · ${state} · ${typed}`;
     });
-    return text(`${all.length} meeting(s) in ${MEETINGS_DIR}:\n\n${rows.join('\n')}`);
+    return text(`${all.length} meeting(s) in ${meetingsDir()}:\n\n${rows.join('\n')}`);
   }
 );
 

@@ -28,8 +28,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { isMain } from '../m0/lib/hardware.js';
+import { meetingsDir } from './meetings-dir.js';
 
-export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
+// A function, not a constant: the meetings folder is a setting now, and a
+// constant would bake in the default at import time, before main has read it.
+export { meetingsDir };
 
 const INSTRUCTIONS = `Below are the notes I typed during a meeting, and the transcript of that meeting.
 
@@ -111,9 +114,10 @@ export function copyToClipboard(text) {
 }
 
 async function latestMeeting() {
-  const entries = await fsp.readdir(MEETINGS_DIR, { withFileTypes: true }).catch(() => []);
+  const root = meetingsDir();
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
   const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  return dirs.length ? path.join(MEETINGS_DIR, dirs[dirs.length - 1]) : null;
+  return dirs.length ? path.join(root, dirs[dirs.length - 1]) : null;
 }
 
 export async function promptForMeeting(dir) {
@@ -140,7 +144,7 @@ if (isMain(import.meta.url)) {
 
   const dir = target ? path.resolve(target) : await latestMeeting();
   if (!dir) {
-    console.log(`No meetings in ${MEETINGS_DIR}. Record one first.`);
+    console.log(`No meetings in ${meetingsDir()}. Record one first.`);
     process.exit(0);
   }
 

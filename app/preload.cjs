@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld('api', {
   openFolder: (dir) => ipcRenderer.invoke('open-folder', dir),
   modelsReady: () => ipcRenderer.invoke('models-ready'),
   meetingsDir: () => ipcRenderer.invoke('meetings-dir'),
+  // Choosing where meetings are kept. The picker is a native dialog, so it has
+  // to run in main; the check runs there too because it stats the path.
+  pickMeetingsDir: () => ipcRenderer.invoke('pick-meetings-dir'),
+  checkMeetingsDir: (dir) => ipcRenderer.invoke('check-meetings-dir', dir),
   setAlwaysOnTop: (on) => ipcRenderer.invoke('set-always-on-top', on),
   appVersion: () => ipcRenderer.invoke('app-version'),
 

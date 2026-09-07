@@ -13,7 +13,7 @@
  *     meeting.json     timings, devices, gap markers, integrity check
  */
 
-import { app, BrowserWindow, Menu, Tray, nativeImage, screen, session, desktopCapturer, ipcMain, shell, clipboard, powerSaveBlocker } from 'electron';
+import { app, BrowserWindow, Menu, Tray, nativeImage, screen, session, desktopCapturer, ipcMain, shell, clipboard, powerSaveBlocker, dialog } from 'electron';
 import { execFile as execFileCp } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
@@ -35,9 +35,12 @@ import { parseMicUse, pendingDetections, sessionId, labelFor } from './mic-watch
 // here would evaluate m0/lib/models.js before the MIN_MODELS_DIR line below
 // runs, and a packaged build would then look for its models inside the asar.
 import { samplesFromIpc } from './ipc-samples.js';
+import { meetingsDir, setMeetingsDir, whyNotUsable } from './meetings-dir.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
+// A function, not a constant. The folder is a setting, and a constant here
+// would be evaluated at import, long before the settings file below is read.
+export { meetingsDir };
 
 /**
  * Every filesystem path in this file arrives as a plain string over IPC, and
@@ -46,7 +49,7 @@ export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
  * user's own privileges: shell.openPath is ShellExecute on Windows, so a path
  * to an .exe, .bat or .lnk gets run, and shell.trashItem recurses through a
  * directory. Nothing here acts on a path until it resolves to something strictly
- * inside MEETINGS_DIR.
+ * inside the meetings folder.
  *
  * The root itself is a special case, and it is only ever allowed on request.
  * open-folder needs it, because opening the library is exactly what its button
@@ -62,18 +65,21 @@ export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
  * inside the folder would still pass. Planting one already needs write access
  * to the user's disk.
  */
-const ROOT = path.resolve(MEETINGS_DIR);
+// Read per call rather than once at load: the folder is a setting, and a
+// root captured at startup would keep guarding the OLD folder after a change,
+// refusing every path in the new one.
 const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p);
 
 function confine(p, { allowRoot = false } = {}) {
   if (typeof p !== 'string' || !p.trim()) throw new Error('No meeting folder given.');
+  const root = path.resolve(meetingsDir());
   const full = path.resolve(p);
-  if (fold(full) === fold(ROOT)) {
+  if (fold(full) === fold(root)) {
     if (allowRoot) return full;
     throw new Error(`Refused: ${full} is the whole meetings library, not one meeting.`);
   }
-  if (!fold(full).startsWith(fold(ROOT) + path.sep)) {
-    throw new Error(`Refused: ${full} is outside ${ROOT}.`);
+  if (!fold(full).startsWith(fold(root) + path.sep)) {
+    throw new Error(`Refused: ${full} is outside ${root}.`);
   }
   return full;
 }
@@ -421,8 +427,8 @@ ipcMain.handle('capture-begin', async (_evt, payload = {}) => {
     const meta = await readMeta(target);
     if (!meta) throw new Error('That meeting folder has no meeting.json, so there is nothing to resume.');
   } else {
-    const base = confine(path.join(MEETINGS_DIR, folderName(startedAt, title)));
-    await fsp.mkdir(MEETINGS_DIR, { recursive: true });
+    const base = confine(path.join(meetingsDir(), folderName(startedAt, title)));
+    await fsp.mkdir(meetingsDir(), { recursive: true });
     target = await uniqueDir(base);
   }
 
@@ -563,10 +569,11 @@ async function trackMetaFromWav(file, sampleRate, wallSeconds) {
  */
 async function recoverCaptures() {
   let recovered = 0;
-  const dirs = await fsp.readdir(MEETINGS_DIR, { withFileTypes: true }).catch(() => []);
+  const root = meetingsDir();
+  const dirs = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
   for (const entry of dirs) {
     if (!entry.isDirectory()) continue;
-    const dir = path.join(MEETINGS_DIR, entry.name);
+    const dir = path.join(root, entry.name);
     const markerPath = path.join(dir, CAPTURE_MARKER);
     let marker;
     try {
@@ -766,9 +773,9 @@ ipcMain.handle('save-meeting', async (_evt, payload) => {
   // through the same gate, and the gate runs before anything is created so no
   // filesystem call below acts on an unchecked path. uniqueDir only appends a
   // counter to this name, so whatever folder it settles on has the checked parent.
-  const base = confine(path.join(MEETINGS_DIR, folderName(startedAt, title)));
+  const base = confine(path.join(meetingsDir(), folderName(startedAt, title)));
 
-  await fsp.mkdir(MEETINGS_DIR, { recursive: true });
+  await fsp.mkdir(meetingsDir(), { recursive: true });
   const dir = await uniqueDir(base);
 
   await Promise.all([
@@ -1063,7 +1070,7 @@ ipcMain.handle('open-provider', async (_evt, id) => {
 ipcMain.handle('open-folder', async (_evt, dir) => {
   // The one caller allowed to name the library root: with no dir it opens the
   // whole folder, which is the point of the button.
-  const target = confine(dir ?? MEETINGS_DIR, { allowRoot: true });
+  const target = confine(dir ?? meetingsDir(), { allowRoot: true });
 
   // Confinement alone is not enough here. openPath on a file runs it through
   // the shell, so a .bat sitting in the meetings folder would execute on a
@@ -1088,7 +1095,42 @@ ipcMain.handle('models-ready', async () => {
   return (await modelReady('parakeet-v3')) && (await modelReady('silero-vad'));
 });
 
-ipcMain.handle('meetings-dir', () => MEETINGS_DIR);
+ipcMain.handle('meetings-dir', () => meetingsDir());
+
+/*
+ * Let the user choose the folder, and check it BEFORE it is saved.
+ *
+ * The reason for checking first: pointing the app at a file, or at a path whose
+ * parent does not exist, would leave every list empty and read exactly like
+ * "MIN lost my meetings". Better to refuse with a sentence than to succeed into
+ * nothing. Nothing is ever moved; the setting points at a folder, and meetings
+ * already written stay where they are.
+ */
+ipcMain.handle('pick-meetings-dir', async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Where should MIN keep meetings?',
+    defaultPath: meetingsDir(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (res.canceled || !res.filePaths?.length) return null;
+  return res.filePaths[0];
+});
+
+ipcMain.handle('check-meetings-dir', async (_evt, value) => {
+  const full = typeof value === 'string' ? value.trim() : '';
+  if (!full) return { ok: true, dir: meetingsDir(), reason: null };
+  let exists = false, isDirectory = false, parentExists = false;
+  try {
+    const st = await fsp.stat(full);
+    exists = true;
+    isDirectory = st.isDirectory();
+  } catch { /* not there yet, which is allowed if its parent is */ }
+  if (!exists) {
+    parentExists = await fsp.stat(path.dirname(full)).then((s) => s.isDirectory()).catch(() => false);
+  }
+  const reason = whyNotUsable(full, { exists, isDirectory, parentExists });
+  return { ok: !reason, dir: full, reason, exists };
+});
 
 ipcMain.handle('set-always-on-top', (_evt, on) => {
   win?.setAlwaysOnTop(Boolean(on));
@@ -1100,6 +1142,18 @@ ipcMain.handle('app-version', () => app.getVersion());
 /* ---------------------------------------------------------------- settings */
 
 const settings = createSettings(path.join(app.getPath('userData'), 'settings.json'));
+
+/*
+ * Publish the meetings folder to every module in this process, once, here.
+ *
+ * This line has to run before anything reads a meeting, and after the settings
+ * file has been loaded. That is the whole reason the folder is a function call
+ * rather than the constant it used to be: a constant is evaluated when its
+ * module is imported, which is before this point, so the setting could never
+ * have reached it. The same import-order trap already cost this project a
+ * broken packaged build once, with MIN_MODELS_DIR.
+ */
+setMeetingsDir(settings.get('meetingsDir'));
 
 ipcMain.handle('settings-get', () => settings.all());
 /*
@@ -1124,6 +1178,16 @@ ipcMain.handle('settings-set', (_evt, patch) => {
     if (patch && typeof patch === 'object') {
       if ('startAtLogin' in patch) applyLoginItem();
       if ('micDetect' in patch) syncMicWatch();
+      /*
+       * Republish the folder to every module that reads it, then rebuild the
+       * index, which is a cache of the OLD folder's contents and would
+       * otherwise keep answering searches with meetings that are no longer
+       * being listed. Nothing on disk moves; the app simply looks elsewhere.
+       */
+      if ('meetingsDir' in patch) {
+        setMeetingsDir(result.meetingsDir);
+        reindexSoon();
+      }
     }
     return result;
   } catch (err) {

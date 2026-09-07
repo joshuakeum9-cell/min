@@ -972,6 +972,20 @@
         <h1 class="display">Settings</h1>
 
         <section class="card group">
+          <h2>Where meetings are kept</h2>
+          <p class="lede">One folder on this PC, a sub-folder per meeting, plain files you can open in anything.</p>
+          <div class="field">
+            <label for="meetingsDirInput">Meetings folder</label>
+            <div class="fieldRow">
+              <input id="meetingsDirInput" type="text" placeholder="C:\Users\You\Meetings" autocomplete="off" spellcheck="false">
+              <button id="meetingsDirBrowse" class="btn sm">Browse</button>
+              <span id="meetingsDirResult" class="result"></span>
+            </div>
+            <p class="help">Point this at a folder your cloud already syncs, such as <b>Google Drive</b>, and every meeting is in that cloud and on your phone, and ChatGPT or Claude can read it through their Drive connector. MIN itself never signs in to anything: the sync app you already run does that job. Changing this <b>moves nothing</b>, so meetings already saved stay where they are.</p>
+          </div>
+        </section>
+
+        <section class="card group">
           <h2>Calendar</h2>
           <p class="lede">Upcoming meetings appear on Home and name your notes for you.</p>
           <div class="field">

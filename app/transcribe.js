@@ -34,6 +34,7 @@ import { stripFillers as removeFillers } from './fillers.js';
 import {
   segmentsOf, pendingSegments, shiftResults, appendTranscript,
 } from './meeting-schema.js';
+import { meetingsDir } from './meetings-dir.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Inside a packaged app this file lives in app.asar, but the worker is spawned by
@@ -42,7 +43,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WORKER = path
   .join(HERE, 'asr-worker.js')
   .replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
-export const MEETINGS_DIR = path.join(os.homedir(), 'Meetings');
+
+// A function, not a constant: the meetings folder is a setting now, and a
+// constant would bake in the default at import time, before main has read it.
+export { meetingsDir };
 
 const TRACKS = [
   { file: 'mic.wav', speaker: 'You' },
@@ -301,8 +305,9 @@ export function buildTranscript(results, opts = {}) {
 
 async function findMeetings(explicit, all) {
   if (explicit) return [path.resolve(explicit)];
-  const entries = await fsp.readdir(MEETINGS_DIR, { withFileTypes: true }).catch(() => []);
-  const dirs = entries.filter((e) => e.isDirectory()).map((e) => path.join(MEETINGS_DIR, e.name)).sort();
+  const root = meetingsDir();
+  const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
+  const dirs = entries.filter((e) => e.isDirectory()).map((e) => path.join(root, e.name)).sort();
   if (!dirs.length) return [];
   if (!all) return [dirs[dirs.length - 1]];
 
@@ -605,7 +610,7 @@ if (isMain(import.meta.url)) {
 
   const dirs = await findMeetings(target, flags.has('--all'));
   if (!dirs.length) {
-    console.log(`No meetings found in ${MEETINGS_DIR}. Record one first.`);
+    console.log(`No meetings found in ${meetingsDir()}. Record one first.`);
     process.exit(0);
   }
 
